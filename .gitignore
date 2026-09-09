@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Environment / secrets
+.env
+.env.local
+
+# Do NOT ignore models/ — pkl files are <15MB, committed for deployment
+# Do NOT ignore data/ — CSV needed for reproducibility
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flask sessions
+flask_session/
+
+# Logs
+*.log

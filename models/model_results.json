@@ -1,0 +1,53 @@
+{
+  "models": [
+    {
+      "name": "Logistic Regression",
+      "accuracy": 0.9951,
+      "precision": 0.9987,
+      "recall": 0.9881,
+      "f1_score": 0.9934,
+      "is_best": false
+    },
+    {
+      "name": "Random Forest",
+      "accuracy": 0.9974,
+      "precision": 1.0,
+      "recall": 0.993,
+      "f1_score": 0.9965,
+      "is_best": true
+    },
+    {
+      "name": "Gradient Boosting",
+      "accuracy": 0.9958,
+      "precision": 0.9987,
+      "recall": 0.9899,
+      "f1_score": 0.9943,
+      "is_best": false
+    },
+    {
+      "name": "Linear SVM",
+      "accuracy": 0.9968,
+      "precision": 0.9987,
+      "recall": 0.9925,
+      "f1_score": 0.9956,
+      "is_best": false
+    }
+  ],
+  "best_model": "Random Forest",
+  "vectorizer_params": {
+    "analyzer": "char_wb",
+    "ngram_range": [
+      2,
+      4
+    ],
+    "max_features": 5000,
+    "sublinear_tf": true
+  },
+  "dataset": {
+    "total_rows": 30918,
+    "train_rows": 24734,
+    "test_rows": 6183,
+    "benign_count": 19537,
+    "sqli_count": 11381
+  }
+}

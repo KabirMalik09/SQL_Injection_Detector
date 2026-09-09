@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SQLShield — AI-Powered SQL Injection Detector</title>
+  <meta name="description"
+        content="SQLShield detects SQL injection attempts in real time using machine learning. Compare 4 ML models and get instant confidence scores." />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════════════ -->
+<header class="site-header" role="banner">
+  <div class="header-inner">
+    <div class="header-brand">
+      <span class="header-shield" aria-hidden="true">🛡️</span>
+      <div>
+        <div class="header-title">SQLShield</div>
+        <div class="header-subtitle">NorthCap University &middot; Kabir Malik &middot; 24CSU089</div>
+      </div>
+    </div>
+
+    <div class="header-badge" role="status" aria-live="polite">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Checking model…</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN
+════════════════════════════════════════════════════════════ -->
+<main class="main-container" id="main">
+
+  <!-- ── Model not loaded banner ─────────────────────────── -->
+  {% if not model_loaded %}
+  <div class="model-error-banner" role="alert">
+    <span>⚠</span>
+    <span>
+      ML model not found. Run <code style="font-family:'JetBrains Mono',monospace;font-size:12px;">python train.py</code>
+      to train and save the model, then restart the server.
+    </span>
+  </div>
+  {% endif %}
+
+  <!-- ╔═══════════════════════════════════════════╗
+       ║         DETECTION CARD (Input)            ║
+       ╚═══════════════════════════════════════════╝ -->
+  <section class="card" id="detectionCard" aria-labelledby="detectionHeading">
+
+    <h1 class="card-title" id="detectionHeading">
+      <span class="icon" aria-hidden="true">🔍</span>
+      SQL Injection Detector
+    </h1>
+
+    <label class="query-label" for="queryInput">Enter SQL Query or Web Input</label>
+
+    <textarea
+      id="queryInput"
+      name="query"
+      rows="5"
+      maxlength="2001"
+      placeholder="Enter a SQL query or web input to analyse…"
+      aria-describedby="charCounter inputErrorMsg"
+      spellcheck="false"
+      autocomplete="off"
+    ></textarea>
+
+    <div class="char-counter" id="charCounter" aria-live="polite">0 / 2000</div>
+    <div class="input-error-msg" id="inputErrorMsg" role="alert" aria-live="assertive"></div>
+
+    <!-- Example buttons -->
+    <div class="example-row">
+      <label>Examples:</label>
+      <button class="btn-example" data-example="union"   title="UNION-based SQLi payload"   type="button">UNION Attack</button>
+      <button class="btn-example" data-example="boolean" title="Boolean-based SQLi payload"  type="button">Boolean Attack</button>
+      <button class="btn-example" data-example="time"    title="Time-based SQLi payload"     type="button">Time-Based</button>
+      <button class="btn-example" data-example="benign"  title="Normal SQL SELECT statement" type="button">Benign Query</button>
+    </div>
+
+    <!-- Analyse button -->
+    <button class="btn-analyse" id="analyseBtn" type="button"
+            aria-label="Analyse the entered query">
+      <span class="spinner hidden" id="analyseSpinner" aria-hidden="true"></span>
+      <span id="analyseBtnText">Analyse Query</span>
+    </button>
+
+    <p style="font-size:11px;color:var(--text-secondary);margin-top:10px;text-align:center;">
+      Tip: Press <kbd style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:10px;">Ctrl+Enter</kbd> to analyse
+    </p>
+  </section>
+
+  <!-- ╔═══════════════════════════════════════════╗
+       ║           RESULT CARD                     ║
+       ╚═══════════════════════════════════════════╝ -->
+  <section class="card result-card hidden" id="resultCard" aria-labelledby="resultHeading" aria-live="polite">
+
+    <h2 class="card-title" id="resultHeading">
+      <span class="icon" aria-hidden="true">📊</span>
+      Detection Result
+    </h2>
+
+    <div class="result-panels">
+
+      <!-- Verdict -->
+      <div class="verdict-panel benign" id="verdictPanel" role="status">
+        <div class="verdict-icon" id="verdictIcon" aria-hidden="true">✓</div>
+        <div class="verdict-label" id="verdictLabel">BENIGN QUERY</div>
+        <div class="verdict-sublabel text-secondary" id="verdictSublabel">Input appears safe</div>
+      </div>
+
+      <!-- Details -->
+      <div class="details-panel">
+
+        <div>
+          <div class="detail-row" style="margin-bottom:6px;">
+            <span class="detail-key">Confidence Score</span>
+          </div>
+          <div class="confidence-val high" id="confVal">—</div>
+          <div class="confidence-bar-wrap" style="margin-top:8px;">
+            <div class="confidence-bar high" id="confBar" style="width:0%;" role="progressbar"
+                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+        </div>
+
+        <div class="detail-row">
+          <span class="detail-key">Attack Type</span>
+          <span class="badge badge-neutral" id="attackBadge">—</span>
+        </div>
+
+        <div class="detail-row">
+          <span class="detail-key">Response Time</span>
+          <span class="mono" id="responseTime" style="font-size:13px;color:var(--text-secondary);">—</span>
+        </div>
+
+      </div><!-- /details-panel -->
+    </div><!-- /result-panels -->
+  </section>
+
+  <!-- ╔═══════════════════════════════════════════╗
+       ║        MODEL COMPARISON                   ║
+       ╚═══════════════════════════════════════════╝ -->
+  <section class="card" id="modelComparisonCard" aria-labelledby="modelHeading">
+
+    <h2 class="card-title" id="modelHeading">
+      <span class="icon" aria-hidden="true">🤖</span>
+      Model Performance Comparison
+    </h2>
+
+    <!-- Bar chart -->
+    <div class="chart-wrap">
+      <canvas id="modelChart" aria-label="Model performance bar chart" role="img"></canvas>
+    </div>
+
+    <!-- Comparison table -->
+    <div class="model-table-wrap">
+      <table class="model-table" aria-label="Model metrics table">
+        <thead>
+          <tr>
+            <th scope="col">Model</th>
+            <th scope="col">Accuracy</th>
+            <th scope="col">Precision</th>
+            <th scope="col">Recall</th>
+            <th scope="col">F1-Score</th>
+          </tr>
+        </thead>
+        <tbody id="modelTableBody">
+          <tr>
+            <td colspan="5" class="no-results-msg">Loading model results…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ╔═══════════════════════════════════════════╗
+       ║         DETECTION HISTORY                 ║
+       ╚═══════════════════════════════════════════╝ -->
+  <section class="card" id="historyCard" aria-labelledby="historyHeading">
+
+    <div class="history-header">
+      <h2 class="card-title" id="historyHeading" style="margin-bottom:0;">
+        <span class="icon" aria-hidden="true">📜</span>
+        Detection History
+        <span style="font-family:'Inter',sans-serif;font-size:12px;color:var(--text-secondary);font-weight:400;">(last 20)</span>
+      </h2>
+      <button class="btn-clear" id="clearHistoryBtn" type="button" aria-label="Clear all history">
+        Clear History
+      </button>
+    </div>
+
+    <div class="history-table-wrap">
+      <table class="history-table" aria-label="Detection history table">
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Query</th>
+            <th scope="col">Label</th>
+            <th scope="col">Confidence</th>
+            <th scope="col">Attack Type</th>
+            <th scope="col">Time</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+      <div class="history-empty" id="historyEmpty">
+        No detections yet. Analyse a query to begin.
+      </div>
+    </div>
+
+  </section>
+
+</main><!-- /main-container -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     TOAST CONTAINER
+════════════════════════════════════════════════════════════ -->
+<div class="toast-container" id="toastContainer" aria-live="assertive" aria-atomic="true"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════════════════════ -->
+<footer class="site-footer" role="contentinfo">
+  <div class="footer-inner">
+    <div class="footer-name">Kabir Malik — 24CSU089</div>
+    <div class="footer-meta">B.Tech CSE (Cybersecurity) &middot; The NorthCap University &middot; SQLShield v1.0.0</div>
+    <div class="footer-links">
+      <a href="https://github.com/" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="/api/predict" target="_blank" rel="noopener noreferrer">API Docs</a>
+      <a href="/api/models"  target="_blank" rel="noopener noreferrer">Model Results</a>
+    </div>
+  </div>
+</footer>
+
+<!-- App JS -->
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+</body>
+</html>
