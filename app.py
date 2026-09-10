@@ -70,21 +70,36 @@ ATTACK_PATTERNS = {
 }
 
 
-def classify_attack(query: str) -> str:
-    """Return attack type label for a query (benign returns '—')."""
-    q = query.lower()
-    matched = []
-    for attack_type, patterns in ATTACK_PATTERNS.items():
-        for pat in patterns:
-            if pat in q:
-                matched.append(attack_type)
-                break
+def classify_attack_type(query: str) -> str:
+    """Return the single dominant attack type using a priority-based classifier.
 
-    if len(matched) == 0:
-        return "Unknown SQLi"
-    if len(matched) == 1:
-        return matched[0]
-    return "Multiple Types"
+    Priority order (most specific first):
+      Time-based → UNION-based → Error-based → Stacked Query → Boolean-based → Comment-based
+    """
+    q = query.lower()
+
+    if any(x in q for x in ["sleep(", "waitfor delay", "pg_sleep(", "benchmark("]):
+        return "Time-based"
+
+    if any(x in q for x in ["union select", "union all select"]):
+        return "UNION-based"
+
+    if any(x in q for x in ["extractvalue(", "updatexml(", "@@version", "@@datadir", "utl_inaddr"]):
+        return "Error-based"
+
+    if any(x in q for x in [";drop", "; drop", ";insert", "; insert",
+                              ";update", "; update", ";delete", "; delete"]):
+        return "Stacked Query"
+
+    if any(x in q for x in ["or 1=1", "and 1=1", "or 1 =1",
+                              "or '1'='1'", "or 'a'='a'",
+                              "' or '", '" or "']):
+        return "Boolean-based"
+
+    if any(x in q for x in ["--", "#", "/*", "*/"]):
+        return "Comment-based"
+
+    return "Unknown SQLi"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -221,7 +236,7 @@ def predict():
     # ── 5. Classify attack type
     label_str = "SQL Injection" if pred == 1 else "Benign"
     if pred == 1:
-        attack_type = classify_attack(query)
+        attack_type = classify_attack_type(query)
     else:
         attack_type = "—"
 
@@ -319,7 +334,7 @@ def predict_batch():
 
         elapsed_ms  = int((time.time() - t_start) * 1000)
         label_str   = "SQL Injection" if pred == 1 else "Benign"
-        attack_type = classify_attack(q) if pred == 1 else "—"
+        attack_type = classify_attack_type(q) if pred == 1 else "—"
         ts          = datetime.now().isoformat(timespec="seconds")
 
         _history_id_counter += 1
