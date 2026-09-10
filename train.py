@@ -29,7 +29,10 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    confusion_matrix, roc_curve, auc,
+)
 
 warnings.filterwarnings("ignore")
 
@@ -38,6 +41,7 @@ warnings.filterwarnings("ignore")
 # ──────────────────────────────────────────────────────────────────────────────
 DATA_PATH       = os.path.join("data", "Modified_SQL_Dataset.csv")
 MODELS_DIR      = "models"
+IMG_DIR         = os.path.join("static", "img")
 MODEL_PATH      = os.path.join(MODELS_DIR, "sqli_model.pkl")
 VECTORIZER_PATH = os.path.join(MODELS_DIR, "tfidf_vectorizer.pkl")
 RESULTS_PATH    = os.path.join(MODELS_DIR, "model_results.json")
@@ -230,6 +234,112 @@ def print_summary(results, best_name):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# FIX 7 — EVALUATION PLOTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+def generate_evaluation_plots(best_model, X_te, y_te, best_name):
+    """
+    Generate confusion matrix and ROC curve for the best model.
+    Saved to static/img/ at 150 DPI with dark_background style.
+    """
+    try:
+        import matplotlib
+        matplotlib.use("Agg")  # non-interactive backend
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as mticker
+    except ImportError:
+        print("  [WARN] matplotlib not installed — skipping evaluation plots.")
+        print("         Install with: pip install matplotlib")
+        return
+
+    os.makedirs(IMG_DIR, exist_ok=True)
+    plt.style.use("dark_background")
+
+    ACCENT_BLUE  = "#58a6ff"
+    ACCENT_GREEN = "#3fb950"
+    ACCENT_RED   = "#f85149"
+    BG_CARD      = "#161b22"
+    BG_TERTIARY  = "#21262d"
+    BORDER       = "#30363d"
+    TEXT_SEC     = "#8b949e"
+    TEXT_PRI     = "#e6edf3"
+
+    y_pred = best_model.predict(X_te)
+
+    # ── Confusion Matrix ──────────────────────────────────────────────────────
+    cm = confusion_matrix(y_te, y_pred)
+    fig, ax = plt.subplots(figsize=(5.5, 4.5), facecolor=BG_CARD)
+    ax.set_facecolor(BG_CARD)
+
+    im = ax.imshow(cm, interpolation="nearest", cmap="Blues", vmin=0)
+    fig.colorbar(im, ax=ax, fraction=.04, pad=.03)
+
+    classes = ["Benign", "SQL Injection"]
+    ax.set_xticks([0, 1])
+    ax.set_yticks([0, 1])
+    ax.set_xticklabels(classes, color=TEXT_PRI, fontsize=11)
+    ax.set_yticklabels(classes, color=TEXT_PRI, fontsize=11)
+
+    thresh = cm.max() / 2.0
+    for i in range(2):
+        for j in range(2):
+            ax.text(j, i, format(cm[i, j], "d"),
+                    ha="center", va="center", fontsize=14, fontweight="bold",
+                    color=TEXT_PRI if cm[i, j] < thresh else BG_CARD)
+
+    ax.set_xlabel("Predicted Label", color=TEXT_SEC, fontsize=11, labelpad=10)
+    ax.set_ylabel("True Label",      color=TEXT_SEC, fontsize=11, labelpad=10)
+    ax.set_title(f"Confusion Matrix — {best_name}",
+                 color=TEXT_PRI, fontsize=12, fontweight="bold", pad=14)
+    ax.spines[:].set_color(BORDER)
+    ax.tick_params(colors=TEXT_SEC)
+
+    cm_path = os.path.join(IMG_DIR, "confusion_matrix.png")
+    fig.tight_layout()
+    fig.savefig(cm_path, dpi=150, bbox_inches="tight", facecolor=BG_CARD)
+    plt.close(fig)
+    print(f"      Saved confusion matrix  -> {cm_path}")
+
+    # ── ROC Curve ────────────────────────────────────────────────────────────
+    try:
+        y_prob = best_model.predict_proba(X_te)[:, 1]
+    except AttributeError:
+        print("  [WARN] Model does not support predict_proba — skipping ROC curve.")
+        return
+
+    fpr, tpr, _ = roc_curve(y_te, y_prob)
+    roc_auc     = auc(fpr, tpr)
+
+    fig, ax = plt.subplots(figsize=(5.5, 4.5), facecolor=BG_CARD)
+    ax.set_facecolor(BG_CARD)
+
+    ax.plot(fpr, tpr, color=ACCENT_BLUE, lw=2.2,
+            label=f"AUC = {roc_auc:.4f}")
+    ax.fill_between(fpr, tpr, alpha=0.10, color=ACCENT_BLUE)
+    ax.plot([0, 1], [0, 1], color=BORDER, lw=1, linestyle="--", label="Random")
+
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.02])
+    ax.set_xlabel("False Positive Rate", color=TEXT_SEC, fontsize=11, labelpad=10)
+    ax.set_ylabel("True Positive Rate",  color=TEXT_SEC, fontsize=11, labelpad=10)
+    ax.set_title(f"ROC Curve — {best_name}",
+                 color=TEXT_PRI, fontsize=12, fontweight="bold", pad=14)
+    ax.tick_params(colors=TEXT_SEC)
+    ax.spines[:].set_color(BORDER)
+    ax.xaxis.set_major_formatter(mticker.PercentFormatter(xmax=1))
+    ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1))
+    legend = ax.legend(loc="lower right", fontsize=11,
+                       facecolor=BG_TERTIARY, edgecolor=BORDER,
+                       labelcolor=TEXT_PRI)
+
+    roc_path = os.path.join(IMG_DIR, "roc_curve.png")
+    fig.tight_layout()
+    fig.savefig(roc_path, dpi=150, bbox_inches="tight", facecolor=BG_CARD)
+    plt.close(fig)
+    print(f"      Saved ROC curve          -> {roc_path}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -254,6 +364,11 @@ def main():
                    total, benign, sqli)
 
     print_summary(results, best_name)
+
+    # FIX 7 — generate evaluation plots
+    print("[+] Generating evaluation plots…")
+    generate_evaluation_plots(best_model, X_te, y_test, best_name)
+    print("    Done.\n")
 
 
 if __name__ == "__main__":

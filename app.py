@@ -12,7 +12,7 @@ import logging
 from datetime import datetime
 
 import joblib
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -155,7 +155,7 @@ def set_security_headers(response):
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src https://fonts.gstatic.com; "
-        "img-src 'self' data:;"
+        "img-src 'self' data: blob:;"
     )
     return response
 
@@ -268,6 +268,83 @@ def get_model_results():
     if model_results is None:
         return jsonify({"error": "model_results.json not found."}), 404
     return jsonify(model_results), 200
+
+
+@app.route("/api/predict/batch", methods=["POST"])
+@limiter.limit("10 per minute")
+def predict_batch():
+    """
+    POST /api/predict/batch
+    Body: { "queries": ["<sql1>", "<sql2>", ...] }  (max 20)
+    Returns: { "results": [...], "count": N }
+    """
+    global detection_history, _history_id_counter
+
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON."}), 400
+
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Invalid JSON body."}), 400
+
+    queries_raw = data.get("queries", [])
+    if not isinstance(queries_raw, list):
+        return jsonify({"error": "'queries' must be a list."}), 400
+    if len(queries_raw) == 0:
+        return jsonify({"error": "'queries' list is empty."}), 400
+    if len(queries_raw) > 20:
+        return jsonify({"error": "Maximum 20 queries per batch."}), 400
+
+    if model is None or vectorizer is None:
+        return jsonify({"error": "Model not loaded. Run train.py first."}), 503
+
+    results = []
+    for q_raw in queries_raw:
+        is_valid, q_or_err = validate_input(q_raw)
+        if not is_valid:
+            results.append({"query": str(q_raw)[:80], "error": q_or_err})
+            continue
+
+        q = q_or_err
+        t_start = time.time()
+        try:
+            X     = vectorizer.transform([q])
+            pred  = int(model.predict(X)[0])
+            proba = model.predict_proba(X)[0]
+            conf  = round(float(proba[pred]) * 100, 2)
+        except Exception as e:
+            logger.error(f"Batch prediction error: {e}")
+            results.append({"query": q, "error": "Prediction failed."})
+            continue
+
+        elapsed_ms  = int((time.time() - t_start) * 1000)
+        label_str   = "SQL Injection" if pred == 1 else "Benign"
+        attack_type = classify_attack(q) if pred == 1 else "—"
+        ts          = datetime.now().isoformat(timespec="seconds")
+
+        _history_id_counter += 1
+        entry = {
+            "id":          _history_id_counter,
+            "query":       q,
+            "label":       label_str,
+            "confidence":  conf,
+            "attack_type": attack_type,
+            "timestamp":   ts,
+            "response_ms": elapsed_ms,
+        }
+        detection_history.append(entry)
+        if len(detection_history) > 20:
+            detection_history.pop(0)
+
+        results.append(entry)
+
+    return jsonify({"results": results, "count": len(results)}), 200
+
+
+@app.route("/api/docs", methods=["GET"])
+def api_docs():
+    """Render the API documentation page."""
+    return render_template("api_docs.html")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

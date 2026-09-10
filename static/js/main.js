@@ -35,31 +35,97 @@ const responseTime    = document.getElementById("responseTime");
 const historyBody     = document.getElementById("historyBody");
 const historyEmpty    = document.getElementById("historyEmpty");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+const exportCsvBtn    = document.getElementById("exportCsvBtn");
 
 const toastContainer  = document.getElementById("toastContainer");
 
 const modelTableBody  = document.getElementById("modelTableBody");
 
-// Chart.js instance
+// FIX 2 — batch mode
+const batchToggleBtn  = document.getElementById("batchToggleBtn");
+const batchToggleIcon = document.getElementById("batchToggleIcon");
+const batchToggleLbl  = document.getElementById("batchToggleLabel");
+const batchHint       = document.getElementById("batchHint");
+const batchResultCard = document.getElementById("batchResultCard");
+const batchResultBody = document.getElementById("batchResultBody");
+const batchResultCount= document.getElementById("batchResultCount");
+
+// FIX 6 — copy result
+const copyResultBtn   = document.getElementById("copyResultBtn");
+const copyTooltip     = document.getElementById("copyTooltip");
+
+// ApexCharts instance
 let perfChart = null;
 
 // Local history array (mirrors server state)
 let localHistory = [];
 
+// Current result data for copy feature
+let lastResultData = null;
+
+// Batch mode flag
+let isBatchMode = false;
+
+// ── FIX 2 — Batch mode toggle ────────────────────────────────────────────────
+batchToggleBtn.addEventListener("click", () => {
+  isBatchMode = !isBatchMode;
+  batchToggleBtn.setAttribute("aria-pressed", String(isBatchMode));
+  batchToggleBtn.classList.toggle("batch-active", isBatchMode);
+  batchToggleIcon.textContent  = isBatchMode ? "📦" : "⚡";
+  batchToggleLbl.textContent   = isBatchMode ? "Batch Mode" : "Single Query";
+  batchHint.classList.toggle("hidden", !isBatchMode);
+
+  const queryLbl = document.getElementById("queryInputLabel");
+  if (isBatchMode) {
+    queryInput.placeholder = "Enter one query per line (max 20)…";
+    queryInput.rows = 8;
+    queryLbl.textContent = "Enter SQL Queries (one per line)";
+  } else {
+    queryInput.placeholder = "Enter a SQL query or web input to analyse…";
+    queryInput.rows = 5;
+    queryLbl.textContent = "Enter SQL Query or Web Input";
+  }
+
+  // Hide single-mode result card when switching to batch
+  if (isBatchMode) {
+    resultCard.classList.add("hidden");
+    resultCard.classList.remove("visible");
+  } else {
+    batchResultCard.classList.add("hidden");
+  }
+
+  charCounter.textContent = "0 / 2000";
+  charCounter.className   = "char-counter";
+  queryInput.value        = "";
+  clearInputError();
+});
+
 // ── Char counter ─────────────────────────────────────────────────────────────
 queryInput.addEventListener("input", () => {
-  const len = queryInput.value.length;
-  charCounter.textContent = `${len} / 2000`;
-  charCounter.className   = "char-counter";
-
-  if (len > 2000) {
-    charCounter.classList.add("error");
-    analyseBtn.disabled = true;
-  } else if (len > 1700) {
-    charCounter.classList.add("warn");
-    analyseBtn.disabled = false;
+  if (isBatchMode) {
+    // In batch mode, count lines
+    const lines = queryInput.value.split("\n").filter(l => l.trim() !== "");
+    charCounter.textContent = `${lines.length} line${lines.length !== 1 ? "s" : ""} / 20 max`;
+    charCounter.className   = "char-counter";
+    if (lines.length > 20) {
+      charCounter.classList.add("error");
+      analyseBtn.disabled = true;
+    } else {
+      analyseBtn.disabled = false;
+    }
   } else {
-    analyseBtn.disabled = false;
+    const len = queryInput.value.length;
+    charCounter.textContent = `${len} / 2000`;
+    charCounter.className   = "char-counter";
+    if (len > 2000) {
+      charCounter.classList.add("error");
+      analyseBtn.disabled = true;
+    } else if (len > 1700) {
+      charCounter.classList.add("warn");
+      analyseBtn.disabled = false;
+    } else {
+      analyseBtn.disabled = false;
+    }
   }
 
   // Clear error state on typing
@@ -80,18 +146,22 @@ document.querySelectorAll(".btn-example").forEach((btn) => {
 });
 
 // ── Analyse button ──────────────────────────────────────────────────────────
-analyseBtn.addEventListener("click", runAnalysis);
+analyseBtn.addEventListener("click", () => {
+  if (isBatchMode) runBatchAnalysis();
+  else runAnalysis();
+});
 
 queryInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-    runAnalysis();
+    if (isBatchMode) runBatchAnalysis();
+    else runAnalysis();
   }
 });
 
+// ── Single analysis ─────────────────────────────────────────────────────────
 async function runAnalysis() {
   const query = queryInput.value.trim();
 
-  // Validate client-side
   if (!query) {
     setInputError("Please enter a query to analyse.");
     return;
@@ -117,6 +187,7 @@ async function runAnalysis() {
     }
 
     const data = await res.json();
+    lastResultData = data;
     showResult(data);
     addHistoryRow(data, true);
   } catch (err) {
@@ -127,16 +198,114 @@ async function runAnalysis() {
   }
 }
 
+// ── FIX 2 — Batch analysis ───────────────────────────────────────────────────
+async function runBatchAnalysis() {
+  const lines = queryInput.value
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l !== "");
+
+  if (lines.length === 0) {
+    setInputError("Please enter at least one query (one per line).");
+    return;
+  }
+  if (lines.length > 20) {
+    setInputError("Maximum 20 queries per batch.");
+    return;
+  }
+
+  setLoadingState(true);
+  clearInputError();
+
+  try {
+    const res = await fetch("/api/predict/batch", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ queries: lines }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    renderBatchResults(data.results);
+
+    // Add all to local history
+    data.results.forEach(r => {
+      if (!r.error) addHistoryRow(r, false);
+    });
+    // Flash newest
+    if (data.results.length > 0 && !data.results[0].error) {
+      renderHistory(data.results[0].id);
+    } else {
+      renderHistory();
+    }
+
+  } catch (err) {
+    showToast(`Batch detection failed: ${err.message}`, "error");
+    queryInput.classList.add("error");
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+function renderBatchResults(results) {
+  batchResultBody.innerHTML = "";
+  batchResultCount.textContent = `— ${results.length} quer${results.length !== 1 ? "ies" : "y"}`;
+  batchResultCard.classList.remove("hidden");
+  batchResultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  results.forEach((entry, idx) => {
+    const tr = document.createElement("tr");
+
+    if (entry.error) {
+      tr.innerHTML = `
+        <td style="color:var(--text-secondary);font-family:'JetBrains Mono',monospace;font-size:12px;">${idx + 1}</td>
+        <td class="query-cell" title="${escHtml(entry.query || '')}">${escHtml((entry.query || "").slice(0, 45))}${(entry.query || "").length > 45 ? "…" : ""}</td>
+        <td colspan="3" style="color:var(--accent-red);font-size:12px;">⚠ ${escHtml(entry.error)}</td>
+      `;
+    } else {
+      const isSqli    = entry.label === "SQL Injection";
+      const confClass = entry.confidence >= 80 ? "high" : entry.confidence >= 60 ? "medium" : "low";
+      const badgeCls  = isSqli ? "badge-sqli" : "badge-benign";
+      const shortQ    = entry.query.length > 45 ? entry.query.slice(0, 45) + "…" : entry.query;
+      const confColor = confClass === "high" ? "var(--accent-green)"
+                      : confClass === "medium" ? "var(--accent-orange)"
+                      : "var(--accent-red)";
+
+      tr.innerHTML = `
+        <td style="color:var(--text-secondary);font-family:'JetBrains Mono',monospace;font-size:12px;">${idx + 1}</td>
+        <td class="query-cell" title="${escHtml(entry.query)}">${escHtml(shortQ)}</td>
+        <td><span class="badge ${badgeCls}">${escHtml(entry.label)}</span></td>
+        <td class="conf-cell" style="color:${confColor}">${entry.confidence.toFixed(1)}%</td>
+        <td><span class="badge badge-neutral">${escHtml(entry.attack_type)}</span></td>
+      `;
+    }
+    batchResultBody.appendChild(tr);
+  });
+}
+
 // ── Loading state ────────────────────────────────────────────────────────────
 function setLoadingState(loading) {
   analyseBtn.disabled        = loading;
   analyseSpinner.classList.toggle("hidden", !loading);
-  analyseBtnText.textContent = loading ? "Analysing…" : "Analyse Query";
+  if (loading) {
+    analyseBtnText.textContent = isBatchMode ? "Analysing batch…" : "Analysing…";
+  } else {
+    analyseBtnText.textContent = isBatchMode ? "Analyse Batch" : "Analyse Query";
+  }
 }
 
 // ── Input error helpers ──────────────────────────────────────────────────────
 function setInputError(msg) {
-  queryInput.classList.add("error");
+  queryInput.classList.remove("error",
+    "animate__animated", "animate__shakeX");
+  // Force reflow so the animation re-triggers even if already applied
+  void queryInput.offsetWidth;
+  queryInput.classList.add("error",
+    "animate__animated", "animate__shakeX");
   inputErrorMsg.textContent = msg;
 }
 
@@ -145,15 +314,15 @@ function clearInputError() {
   inputErrorMsg.textContent = "";
 }
 
-// ── Show result card ─────────────────────────────────────────────────────────
+// ── FIX 1 — Show result card (benign vs SQLi state correctly handled) ─────────
 function showResult(data) {
   const isSqli = data.label === "SQL Injection";
   const conf   = data.confidence;  // already a percentage
 
-  // Verdict panel
+  // Verdict panel — FIX 1: correctly applies .sqli vs .benign class
   verdictPanel.className    = `verdict-panel ${isSqli ? "sqli" : "benign"}`;
   verdictIcon.textContent   = isSqli ? "⚠" : "✓";
-  verdictLabel.textContent  = isSqli ? "SQL INJECTION\nDETECTED" : "BENIGN QUERY";
+  verdictLabel.textContent  = isSqli ? "SQL INJECTION\nDETECTED" : "✓ BENIGN QUERY";
   verdictLabel.style.whiteSpace = "pre-line";
   verdictSublabel.textContent = isSqli
     ? "Malicious pattern detected"
@@ -165,6 +334,7 @@ function showResult(data) {
   confVal.className   = `confidence-val ${confClass}`;
   confBar.style.width = `${conf}%`;
   confBar.className   = `confidence-bar ${confClass}`;
+  confBar.setAttribute("aria-valuenow", conf);
 
   // Attack type badge
   const badgeClass = isSqli ? "badge-sqli" : "badge-benign";
@@ -174,17 +344,46 @@ function showResult(data) {
   // Response time
   responseTime.textContent = `${data.response_ms} ms`;
 
-  // Show card
+  // Show card with Animate.css fadeInUp
   resultCard.classList.remove("hidden");
-  resultCard.classList.add("visible");
+  resultCard.classList.remove("animate__animated", "animate__fadeInUp");
+  // Force reflow so animation restarts every prediction
+  void resultCard.offsetWidth;
+  resultCard.classList.add("visible", "animate__animated", "animate__fadeInUp");
   resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
+
+// ── FIX 6 — Copy result button ───────────────────────────────────────────────
+copyResultBtn.addEventListener("click", () => {
+  if (!lastResultData) return;
+
+  const formatted = JSON.stringify({
+    query:       lastResultData.query,
+    label:       lastResultData.label,
+    confidence:  `${lastResultData.confidence}%`,
+    attack_type: lastResultData.attack_type,
+    timestamp:   lastResultData.timestamp,
+    response_ms: lastResultData.response_ms,
+  }, null, 2);
+
+  navigator.clipboard.writeText(formatted).then(() => {
+    copyResultBtn.classList.add("copied");
+    copyTooltip.classList.remove("hidden");
+
+    setTimeout(() => {
+      copyResultBtn.classList.remove("copied");
+      copyTooltip.classList.add("hidden");
+    }, 1800);
+  }).catch(() => {
+    showToast("Clipboard copy failed.", "error");
+  });
+});
 
 // ── History ──────────────────────────────────────────────────────────────────
 function addHistoryRow(data, flash = false) {
   localHistory.unshift(data);  // newest first
   if (localHistory.length > 20) localHistory.pop();
-  renderHistory(flash ? data.id : null);
+  if (flash) renderHistory(data.id);
 }
 
 function renderHistory(flashId = null) {
@@ -199,7 +398,11 @@ function renderHistory(flashId = null) {
 
   localHistory.forEach((entry, idx) => {
     const tr = document.createElement("tr");
-    if (flashId && entry.id === flashId) tr.classList.add("new-row");
+    // Add Animate.css fadeIn to the new row if it's the flash row
+    if (flashId && entry.id === flashId) {
+      tr.classList.add("new-row",
+        "animate__animated", "animate__fadeIn");
+    }
 
     const isSqli   = entry.label === "SQL Injection";
     const confClass = entry.confidence >= 80 ? "high"
@@ -208,12 +411,15 @@ function renderHistory(flashId = null) {
     const shortQuery = entry.query.length > 40
       ? entry.query.slice(0, 40) + "…"
       : entry.query;
+    const confColor = confClass === "high" ? "var(--accent-green)"
+                    : confClass === "medium" ? "var(--accent-orange)"
+                    : "var(--accent-red)";
 
     tr.innerHTML = `
       <td style="color:var(--text-secondary);font-family:'JetBrains Mono',monospace;font-size:12px;">${localHistory.length - idx}</td>
       <td class="query-cell" title="${escHtml(entry.query)}">${escHtml(shortQuery)}</td>
       <td><span class="badge ${badgeCls}">${escHtml(entry.label)}</span></td>
-      <td class="conf-cell" style="color:var(--accent-${confClass === 'high' ? 'green' : confClass === 'medium' ? 'orange' : 'red'})">${entry.confidence.toFixed(1)}%</td>
+      <td class="conf-cell" style="color:${confColor}">${entry.confidence.toFixed(1)}%</td>
       <td><span class="badge badge-neutral">${escHtml(entry.attack_type)}</span></td>
       <td class="ts-cell">${formatTime(entry.timestamp)}</td>
     `;
@@ -230,6 +436,38 @@ clearHistoryBtn.addEventListener("click", async () => {
   } catch {
     showToast("Could not clear history.", "error");
   }
+});
+
+// ── FIX 3 — Export history as CSV ────────────────────────────────────────────
+exportCsvBtn.addEventListener("click", () => {
+  if (localHistory.length === 0) {
+    showToast("No history to export.", "error");
+    return;
+  }
+
+  const headers = ["#", "Query", "Label", "Confidence (%)", "Attack Type", "Time"];
+  const rows = localHistory.map((entry, idx) => [
+    localHistory.length - idx,
+    `"${entry.query.replace(/"/g, '""')}"`,
+    entry.label,
+    entry.confidence.toFixed(2),
+    entry.attack_type,
+    entry.timestamp,
+  ]);
+
+  const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  const ts   = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+  a.href     = url;
+  a.download = `sqlshield_history_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(`Exported ${localHistory.length} entr${localHistory.length !== 1 ? "ies" : "y"} as CSV.`, "success");
 });
 
 function formatTime(isoStr) {
@@ -280,84 +518,120 @@ function renderModelTable(models) {
 }
 
 function renderModelChart(models) {
-  const canvas = document.getElementById("modelChart");
-  if (!canvas || !window.Chart) return;
+  const el = document.getElementById("modelChart");
+  if (!el || typeof ApexCharts === "undefined") return;
 
   const labels = models.map((m) => m.name);
   const f1s    = models.map((m) => +(m.f1_score * 100).toFixed(2));
   const accs   = models.map((m) => +(m.accuracy  * 100).toFixed(2));
 
-  const colors = models.map((m) =>
-    m.is_best ? "rgba(88,166,255,0.85)" : "rgba(88,166,255,0.30)"
-  );
-  const borderColors = models.map((m) =>
-    m.is_best ? "rgba(88,166,255,1)" : "rgba(88,166,255,0.55)"
-  );
+  if (perfChart) {
+    perfChart.destroy();
+    perfChart = null;
+  }
 
-  if (perfChart) { perfChart.destroy(); }
-
-  perfChart = new Chart(canvas, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "F1-Score (%)",
-          data: f1s,
-          backgroundColor: colors,
-          borderColor: borderColors,
-          borderWidth: 1.5,
-          borderRadius: 4,
-        },
-        {
-          label: "Accuracy (%)",
-          data: accs,
-          backgroundColor: models.map(() => "rgba(63,185,80,0.25)"),
-          borderColor:     models.map(() => "rgba(63,185,80,0.7)"),
-          borderWidth: 1.5,
-          borderRadius: 4,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          labels: {
-            color: "#8b949e",
-            font: { family: "'Inter', sans-serif", size: 12 },
-            boxWidth: 12,
-          },
-        },
-        tooltip: {
-          backgroundColor: "#21262d",
-          borderColor: "#30363d",
-          borderWidth: 1,
-          titleColor: "#e6edf3",
-          bodyColor:  "#8b949e",
-          callbacks: {
-            label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y}%`,
-          },
-        },
+  const options = {
+    chart: {
+      type: "bar",
+      height: 240,
+      background: "#0d1117",
+      toolbar: { show: false },
+      animations: {
+        enabled: true,
+        easing: "easeinout",
+        speed: 700,
+        animateGradually: { enabled: true, delay: 100 },
+        dynamicAnimation:  { enabled: true, speed: 350 },
       },
-      scales: {
-        x: {
-          ticks: { color: "#8b949e", font: { family: "'Inter',sans-serif", size: 12 } },
-          grid:  { color: "rgba(48,54,61,0.6)" },
-        },
-        y: {
-          min: 90,
-          max: 100,
-          ticks: {
-            color: "#8b949e",
-            font:  { family: "'JetBrains Mono',monospace", size: 11 },
-            callback: (v) => `${v}%`,
-          },
-          grid: { color: "rgba(48,54,61,0.6)" },
-        },
+      theme: { mode: "dark" },
+    },
+    theme: { mode: "dark" },
+    plotOptions: {
+      bar: {
+        borderRadius: 4,
+        columnWidth: "55%",
+        dataLabels: { position: "top" },
       },
     },
+    series: [
+      { name: "F1-Score (%)", data: f1s },
+      { name: "Accuracy (%)", data: accs },
+    ],
+    colors: ["#58a6ff", "#3fb950"],
+    xaxis: {
+      categories: labels,
+      labels: {
+        style: { colors: "#e6edf3", fontFamily: "'Inter', sans-serif", fontSize: "12px" },
+      },
+      axisBorder: { color: "#30363d" },
+      axisTicks:  { color: "#30363d" },
+    },
+    yaxis: {
+      min: 0,
+      max: 100,
+      labels: {
+        style: { colors: "#e6edf3", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px" },
+        formatter: (v) => `${v}%`,
+      },
+    },
+    grid: {
+      borderColor: "#30363d",
+      strokeDashArray: 3,
+    },
+    legend: {
+      labels: { colors: "#e6edf3" },
+      fontFamily: "'Inter', sans-serif",
+    },
+    tooltip: {
+      theme: "dark",
+      style: { fontFamily: "'Inter', sans-serif" },
+      y: {
+        formatter: (val) => `${val.toFixed(2)}%`,
+      },
+    },
+    dataLabels: { enabled: false },
+  };
+
+  perfChart = new ApexCharts(el, options);
+  perfChart.render();
+}
+
+// ── FIX 4 — Model Evaluation Images ─────────────────────────────────────────
+function renderEvalImages() {
+  const grid = document.getElementById("evalImagesGrid");
+  if (!grid) return;
+
+  const images = [
+    { src: "/static/img/confusion_matrix.png", label: "Confusion Matrix" },
+    { src: "/static/img/roc_curve.png",        label: "ROC Curve" },
+  ];
+
+  grid.innerHTML = "";
+
+  images.forEach(({ src, label }) => {
+    const card = document.createElement("div");
+    card.className = "eval-image-card";
+
+    const img = new Image();
+    img.onload = () => {
+      card.innerHTML = `
+        <img src="${src}" alt="${label}" loading="lazy" />
+        <div class="eval-image-label">${label}</div>
+      `;
+    };
+    img.onerror = () => {
+      card.innerHTML = `
+        <div class="eval-placeholder">
+          <div class="eval-ph-icon">📊</div>
+          <p><strong style="color:var(--text-primary);">${label}</strong><br />
+          Run <code>python train.py</code> to generate evaluation charts.</p>
+        </div>
+        <div class="eval-image-label">${label}</div>
+      `;
+    };
+    img.src = src;
+
+    grid.appendChild(card);
   });
 }
 
@@ -389,6 +663,12 @@ function escHtml(str) {
 (function init() {
   loadModelResults();
   renderHistory();
+  renderEvalImages();
+
+  // UPGRADE 3 — AutoAnimate on history tbody
+  if (typeof autoAnimate !== "undefined") {
+    autoAnimate(historyBody);
+  }
 
   // Update status dot based on model availability
   const statusDot  = document.getElementById("statusDot");

@@ -8,11 +8,14 @@
         content="SQLShield detects SQL injection attempts in real time using machine learning. Compare 4 ML models and get instant confidence scores." />
 
   <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600;700&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@600;700&display=swap"
         rel="stylesheet" />
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- Animate.css -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+
+  <!-- ApexCharts -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
   <!-- App CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
@@ -61,23 +64,35 @@
        ╚═══════════════════════════════════════════╝ -->
   <section class="card" id="detectionCard" aria-labelledby="detectionHeading">
 
-    <h1 class="card-title" id="detectionHeading">
-      <span class="icon" aria-hidden="true">🔍</span>
-      SQL Injection Detector
-    </h1>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <h1 class="card-title" id="detectionHeading" style="margin-bottom:0;">
+        <span class="icon" aria-hidden="true">🔍</span>
+        SQL Injection Detector
+      </h1>
+      <!-- FIX 2: Batch mode toggle -->
+      <button class="btn-mode-toggle" id="batchToggleBtn" type="button" aria-pressed="false">
+        <span id="batchToggleIcon">⚡</span>
+        <span id="batchToggleLabel">Single Query</span>
+      </button>
+    </div>
 
-    <label class="query-label" for="queryInput">Enter SQL Query or Web Input</label>
+    <label class="query-label" for="queryInput" id="queryInputLabel">Enter SQL Query or Web Input</label>
 
     <textarea
       id="queryInput"
       name="query"
       rows="5"
-      maxlength="2001"
+      maxlength="20001"
       placeholder="Enter a SQL query or web input to analyse…"
       aria-describedby="charCounter inputErrorMsg"
       spellcheck="false"
       autocomplete="off"
     ></textarea>
+
+    <!-- Batch mode helper text -->
+    <div class="batch-hint hidden" id="batchHint">
+      <span>📋</span> Batch Mode: enter one query per line (max 20). Each line is analysed independently.
+    </div>
 
     <div class="char-counter" id="charCounter" aria-live="polite">0 / 2000</div>
     <div class="input-error-msg" id="inputErrorMsg" role="alert" aria-live="assertive"></div>
@@ -104,14 +119,24 @@
   </section>
 
   <!-- ╔═══════════════════════════════════════════╗
-       ║           RESULT CARD                     ║
+       ║           RESULT CARD (Single)            ║
        ╚═══════════════════════════════════════════╝ -->
   <section class="card result-card hidden" id="resultCard" aria-labelledby="resultHeading" aria-live="polite">
 
-    <h2 class="card-title" id="resultHeading">
-      <span class="icon" aria-hidden="true">📊</span>
-      Detection Result
-    </h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <h2 class="card-title" id="resultHeading" style="margin-bottom:0;">
+        <span class="icon" aria-hidden="true">📊</span>
+        Detection Result
+      </h2>
+      <!-- FIX 6: Copy result button -->
+      <div style="position:relative;">
+        <button class="btn-copy-result" id="copyResultBtn" type="button" title="Copy result as JSON" aria-label="Copy result as JSON">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          Copy
+        </button>
+        <div class="copy-tooltip hidden" id="copyTooltip">Copied!</div>
+      </div>
+    </div>
 
     <div class="result-panels">
 
@@ -151,6 +176,31 @@
   </section>
 
   <!-- ╔═══════════════════════════════════════════╗
+       ║        BATCH RESULTS CARD                 ║
+       ╚═══════════════════════════════════════════╝ -->
+  <section class="card hidden" id="batchResultCard" aria-labelledby="batchResultHeading" aria-live="polite">
+    <h2 class="card-title" id="batchResultHeading">
+      <span class="icon" aria-hidden="true">📦</span>
+      Batch Analysis Results
+      <span id="batchResultCount" style="font-family:'Inter',sans-serif;font-size:12px;color:var(--text-secondary);font-weight:400;"></span>
+    </h2>
+    <div class="history-table-wrap">
+      <table class="history-table" aria-label="Batch analysis results table">
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Query</th>
+            <th scope="col">Label</th>
+            <th scope="col">Confidence</th>
+            <th scope="col">Attack Type</th>
+          </tr>
+        </thead>
+        <tbody id="batchResultBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ╔═══════════════════════════════════════════╗
        ║        MODEL COMPARISON                   ║
        ╚═══════════════════════════════════════════╝ -->
   <section class="card" id="modelComparisonCard" aria-labelledby="modelHeading">
@@ -160,9 +210,9 @@
       Model Performance Comparison
     </h2>
 
-    <!-- Bar chart -->
+    <!-- Bar chart (ApexCharts) -->
     <div class="chart-wrap">
-      <canvas id="modelChart" aria-label="Model performance bar chart" role="img"></canvas>
+      <div id="modelChart" aria-label="Model performance bar chart" role="img"></div>
     </div>
 
     <!-- Comparison table -->
@@ -187,6 +237,19 @@
   </section>
 
   <!-- ╔═══════════════════════════════════════════╗
+       ║        MODEL EVALUATION (FIX 4)           ║
+       ╚═══════════════════════════════════════════╝ -->
+  <section class="card" id="modelEvalCard" aria-labelledby="evalHeading">
+    <h2 class="card-title" id="evalHeading">
+      <span class="icon" aria-hidden="true">📈</span>
+      Model Evaluation
+    </h2>
+    <div class="eval-images-grid" id="evalImagesGrid">
+      <!-- Populated by JS — shows images or placeholders -->
+    </div>
+  </section>
+
+  <!-- ╔═══════════════════════════════════════════╗
        ║         DETECTION HISTORY                 ║
        ╚═══════════════════════════════════════════╝ -->
   <section class="card" id="historyCard" aria-labelledby="historyHeading">
@@ -197,9 +260,16 @@
         Detection History
         <span style="font-family:'Inter',sans-serif;font-size:12px;color:var(--text-secondary);font-weight:400;">(last 20)</span>
       </h2>
-      <button class="btn-clear" id="clearHistoryBtn" type="button" aria-label="Clear all history">
-        Clear History
-      </button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <!-- FIX 3: Export CSV button -->
+        <button class="btn-export-csv" id="exportCsvBtn" type="button" aria-label="Export history as CSV">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Export CSV
+        </button>
+        <button class="btn-clear" id="clearHistoryBtn" type="button" aria-label="Clear all history">
+          Clear History
+        </button>
+      </div>
     </div>
 
     <div class="history-table-wrap">
@@ -239,11 +309,14 @@
     <div class="footer-meta">B.Tech CSE (Cybersecurity) &middot; The NorthCap University &middot; SQLShield v1.0.0</div>
     <div class="footer-links">
       <a href="https://github.com/" target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a href="/api/predict" target="_blank" rel="noopener noreferrer">API Docs</a>
+      <a href="/api/docs" target="_blank" rel="noopener noreferrer">API Docs</a>
       <a href="/api/models"  target="_blank" rel="noopener noreferrer">Model Results</a>
     </div>
   </div>
 </footer>
+
+<!-- AutoAnimate -->
+<script src="https://cdn.jsdelivr.net/npm/@formkit/auto-animate@0.8.2/index.umd.min.js"></script>
 
 <!-- App JS -->
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>

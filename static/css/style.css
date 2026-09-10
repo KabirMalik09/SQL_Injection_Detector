@@ -5,7 +5,7 @@
    ============================================================ */
 
 /* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@600;700&display=swap');
 
 /* ── Design Tokens ── */
 :root {
@@ -88,7 +88,7 @@ a:hover { text-decoration: underline; }
 }
 
 .header-title {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 20px;
   font-weight: 700;
   color: var(--accent-blue);
@@ -152,9 +152,9 @@ a:hover { text-decoration: underline; }
 }
 
 .card-title {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 18px;
   display: flex;
@@ -736,3 +736,204 @@ a:hover { text-decoration: underline; }
   .history-table th:nth-child(6),
   .history-table td:nth-child(6) { display: none; }
 }
+
+/* ============================================================
+   FIX 2 — BATCH MODE TOGGLE
+   ============================================================ */
+.btn-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition),
+              border-color var(--transition);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+
+.btn-mode-toggle:hover {
+  background: #2d333b;
+  color: var(--text-primary);
+  border-color: #444c56;
+}
+
+.btn-mode-toggle.batch-active {
+  background: rgba(88, 166, 255, .12);
+  border-color: rgba(88, 166, 255, .4);
+  color: var(--accent-blue);
+}
+
+/* Batch hint text below textarea */
+.batch-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--accent-blue);
+  background: rgba(88, 166, 255, .07);
+  border: 1px solid rgba(88, 166, 255, .2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+/* ============================================================
+   FIX 3 — EXPORT CSV BUTTON
+   ============================================================ */
+.btn-export-csv {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--accent-green);
+  border-radius: var(--radius-sm);
+  color: var(--accent-green);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 13px;
+  cursor: pointer;
+  transition: background var(--transition);
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-export-csv:hover { background: rgba(63, 185, 80, .1); }
+
+/* ============================================================
+   FIX 4 — MODEL EVALUATION IMAGES
+   ============================================================ */
+.eval-images-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.eval-image-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.eval-image-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.eval-image-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-family: 'Inter', sans-serif;
+}
+
+.eval-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.eval-placeholder .eval-ph-icon {
+  font-size: 32px;
+  opacity: .5;
+}
+
+.eval-placeholder p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.eval-placeholder code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  color: var(--accent-blue);
+}
+
+@media (max-width: 767px) {
+  .eval-images-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   FIX 6 — COPY RESULT BUTTON
+   ============================================================ */
+.btn-copy-result {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition),
+              border-color var(--transition);
+}
+
+.btn-copy-result:hover {
+  background: #2d333b;
+  color: var(--text-primary);
+  border-color: #444c56;
+}
+
+.btn-copy-result.copied {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+  background: rgba(63, 185, 80, .08);
+}
+
+.copy-tooltip {
+  position: absolute;
+  top: -34px;
+  right: 0;
+  background: var(--accent-green);
+  color: #0d1117;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: tooltipIn .2s ease both;
+}
+
+.copy-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 14px;
+  border: 5px solid transparent;
+  border-top-color: var(--accent-green);
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
