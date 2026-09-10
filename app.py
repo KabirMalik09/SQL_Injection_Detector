@@ -389,8 +389,6 @@ def request_too_large(e):
 # ──────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ──────────────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    port  = int(os.environ.get("PORT", 5000))
-    debug = os.environ.get("FLASK_ENV", "development") == "development"
-    logger.info(f"Starting SQLShield on http://127.0.0.1:{port}  (debug={debug})")
-    app.run(host="0.0.0.0", port=port, debug=debug)
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
