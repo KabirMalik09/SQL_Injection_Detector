@@ -4,6 +4,9 @@
 ![Flask](https://img.shields.io/badge/Flask-3.0-green)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4-orange)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
+![Deployed on Render](https://img.shields.io/badge/Live-Render-46E3B7?logo=render)
+
+🌐 **Live Demo:** [https://sql-injection-detection-project.onrender.com](https://sql-injection-detection-project.onrender.com/)
 
 > **Author:** Kabir Malik (24CSU089) · B.Tech CSE (Cybersecurity) · The NorthCap University
 
