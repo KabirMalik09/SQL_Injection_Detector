@@ -57,15 +57,22 @@ ATTACK_PATTERNS = {
     "Time-based":    ["sleep(", "waitfor delay", "pg_sleep", "benchmark("],
     "UNION-based":   ["union select", "union all select", "union all", "union"],
     "Error-based":   ["@@version", "@@global", "extractvalue", "utl_inaddr",
-                      "updatexml", "exp(", "floor(rand", "information_schema"],
+                      "updatexml", "exp(", "floor(rand", "information_schema",
+                      "@@datadir", "1/0"],
     "Stacked Query": [";drop", "; drop", ";insert", "; insert",
                       ";update", "; update", ";delete", "; delete",
                       ";exec", "; exec", ";select"],
-    "Boolean-based": ["or 1=1", "and 1=1", "or 1 =1", "and 1 =1",
+    "Auth Bypass":   ["admin'--", "admin' --", "' or '1'='1",
+                      "or '1'='1'", "admin'#"],
+    "Boolean-based": ["or 1=1", "and 1=1", "or 1 =1", "and 1=2",
                       "or '1'='1'", "or '1' = '1'", "or \"1\"=\"1\"",
                       "or 'a'='a'", "or 'a' = 'a'",
-                      "or true", "and true", "or false",
-                      "' or '", "\" or \""],
+                      "or true", "and false", "or false",
+                      "' or '", "\" or \"", "10 or 1=1"],
+    "Obfuscated":    ["or%20", "%20or%20", "or/**/", "/**/or",
+                      " or  ", "o r ", "or\t", "oR ", " Or "],
+    "Encoded":       ["%27", "%20", "%3d", "%2d%2d", "char(",
+                      "0x", "concat(", "hex("],
     "Comment-based": ["--", "/*", "*/", "#"],
 }
 
@@ -74,28 +81,53 @@ def classify_attack_type(query: str) -> str:
     """Return the single dominant attack type using a priority-based classifier.
 
     Priority order (most specific first):
-      Time-based → UNION-based → Error-based → Stacked Query → Boolean-based → Comment-based
+      Time-based → UNION-based → Error-based → Stacked Query → Auth Bypass
+      → Boolean-based → Obfuscated → Encoded → Comment-based
     """
-    q = query.lower()
+    q = query.lower().strip()
 
-    if any(x in q for x in ["sleep(", "waitfor delay", "pg_sleep(", "benchmark("]):
+    # 1. Time-based (highest priority)
+    if any(x in q for x in ["sleep(", "waitfor delay", "pg_sleep(", "benchmark(",
+                              "and sleep", "or sleep"]):
         return "Time-based"
 
-    if any(x in q for x in ["union select", "union all select"]):
+    # 2. UNION-based
+    if any(x in q for x in ["union select", "union all select", "union select null"]):
         return "UNION-based"
 
-    if any(x in q for x in ["extractvalue(", "updatexml(", "@@version", "@@datadir", "utl_inaddr"]):
+    # 3. Error-based
+    if any(x in q for x in ["extractvalue(", "updatexml(", "@@version", "@@datadir",
+                              "utl_inaddr", "1/0", "and 1/0"]):
         return "Error-based"
 
+    # 4. Stacked queries
     if any(x in q for x in [";drop", "; drop", ";insert", "; insert",
-                              ";update", "; update", ";delete", "; delete"]):
+                              ";update", "; update", ";delete", "; delete",
+                              ";select"]):
         return "Stacked Query"
 
-    if any(x in q for x in ["or 1=1", "and 1=1", "or 1 =1",
-                              "or '1'='1'", "or 'a'='a'",
-                              "' or '", '" or "']):
+    # 5. Auth bypass
+    if any(x in q for x in ["admin'--", "admin' --", "' or '1'='1",
+                              "or '1'='1'", "admin'#"]):
+        return "Auth Bypass"
+
+    # 6. Boolean-based
+    if any(x in q for x in ["or 1=1", "and 1=1", "or 1 =1", "and 1=2",
+                              "or 'a'='a'", "' or '", '" or "',
+                              "or true", "and false", "10 or 1=1"]):
         return "Boolean-based"
 
+    # 7. Obfuscated
+    if any(x in q for x in ["or%20", "%20or%20", "or/**/", "/**/or",
+                              " or  ", "o r ", "or\t", "or ".lower()]):
+        return "Obfuscated"
+
+    # 8. Encoded
+    if any(x in q for x in ["%27", "%20", "%3d", "%2d%2d",
+                              "char(", "0x", "concat(", "hex("]):
+        return "Encoded"
+
+    # 9. Comment-based
     if any(x in q for x in ["--", "#", "/*", "*/"]):
         return "Comment-based"
 
@@ -187,6 +219,11 @@ def index():
         model_loaded=model_loaded,
         model_results=model_results,
     )
+
+
+@app.route("/landing")
+def landing():
+    return render_template("landing.html")
 
 
 @app.route("/api/predict", methods=["POST"])
