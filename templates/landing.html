@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SQLShield &mdash; AI-Powered SQL Injection Detector</title>
+  <meta name="description" content="SQLShield uses machine learning to detect SQL injection attacks in real time with 99.74% accuracy. Built by Kabir Malik, The NorthCap University." />
+  <meta name="author" content="Kabir Malik" />
+  <meta property="og:title" content="SQLShield &mdash; AI-Powered SQL Injection Detector" />
+  <meta property="og:description" content="Detect SQL injection attacks in milliseconds using Random Forest ML. 99.74% accuracy across 30,918 queries." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+
+  <style>
+    /* === Design Tokens (Cyberpunk / SQLShield) === */
+    :root {
+      --clr-bg:          #000000;
+      --clr-bg-card:     #0c130e;
+      --clr-bg-card2:    #060b07;
+      --clr-surface:     #111a12;
+      --clr-primary:     #00ff41;
+      --clr-primary-dim: rgba(0,255,65,0.10);
+      --clr-accent:      #f85149;
+      --clr-accent-dim:  rgba(248,81,73,0.10);
+      --clr-blue:        #58a6ff;
+      --clr-fg:          #e0e0e0;
+      --clr-muted:       #8b949e;
+      --clr-border:      #1a2b1c;
+      --clr-glow:        rgba(0,255,65,0.30);
+      --font-sans:  'Inter', sans-serif;
+      --font-mono:  'JetBrains Mono', monospace;
+      --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px;
+      --transition: 0.2s ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--clr-bg);
+      color: var(--clr-fg);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: var(--clr-primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--clr-bg); }
+    ::-webkit-scrollbar-thumb { background: #1a2b1c; border-radius: 3px; }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,255,65,0.012) 3px, rgba(0,255,65,0.012) 4px);
+      pointer-events: none; z-index: 9999;
+    }
+
+    /* Grid BG */
+    .grid-bg {
+      position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(0,255,65,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.04) 1px, transparent 1px);
+      background-size: 48px 48px; pointer-events: none; z-index: 0;
+    }
+
+    /* === NAV === */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 48px;
+      border-bottom: 1px solid var(--clr-border);
+      background: rgba(0,0,0,0.88);
+      backdrop-filter: blur(14px);
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 18px; font-weight: 700;
+      color: var(--clr-primary);
+      text-shadow: 0 0 16px var(--clr-glow); letter-spacing: 0.5px;
+    }
+    .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+    .nav-links a { font-size: 13px; font-weight: 500; color: var(--clr-muted); transition: color var(--transition); cursor: pointer; }
+    .nav-links a:hover { color: var(--clr-primary); text-decoration: none; }
+    .nav-cta { display: flex; align-items: center; gap: 10px; }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 22px; background: var(--clr-primary); color: #000;
+      font-size: 13px; font-weight: 700; border: none; border-radius: var(--radius-md);
+      cursor: pointer; letter-spacing: 0.3px;
+      transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
+      text-decoration: none;
+    }
+    .btn-primary:hover { background: #1aff55; box-shadow: 0 0 20px var(--clr-glow); transform: translateY(-1px); text-decoration: none; }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 22px; background: transparent; color: var(--clr-muted);
+      font-size: 13px; font-weight: 500;
+      border: 1px solid var(--clr-border); border-radius: var(--radius-md);
+      cursor: pointer; transition: border-color var(--transition), color var(--transition);
+      text-decoration: none;
+    }
+    .btn-ghost:hover { border-color: var(--clr-primary); color: var(--clr-primary); text-decoration: none; }
+
+    /* === HERO === */
+    .hero {
+      position: relative; z-index: 1;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 120px 48px 96px; text-align: center;
+    }
+    .hero-content { max-width: 800px; margin: 0 auto; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 18px;
+      background: var(--clr-primary-dim); border: 1px solid rgba(0,255,65,0.22);
+      border-radius: 999px;
+      font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+      color: var(--clr-primary); letter-spacing: 1.5px; text-transform: uppercase;
+      margin-bottom: 32px;
+    }
+    .pulse-dot {
+      width: 7px; height: 7px; background: var(--clr-primary); border-radius: 50%;
+      animation: pulse 1.8s ease-in-out infinite; flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 4px var(--clr-primary); opacity:1; }
+      50%      { box-shadow: 0 0 12px var(--clr-primary), 0 0 24px var(--clr-glow); opacity:0.5; }
+    }
+
+    .hero-title {
+      font-family: var(--font-mono);
+      font-size: clamp(36px, 7vw, 68px); font-weight: 700;
+      line-height: 1.1; margin-bottom: 24px; letter-spacing: -1px;
+    }
+    .hero-title .hl {
+      color: var(--clr-primary);
+      text-shadow: 0 0 32px var(--clr-glow), 0 0 64px rgba(0,255,65,0.18);
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--clr-muted); line-height: 1.7;
+      max-width: 560px; margin: 0 auto 48px;
+    }
+    .hero-actions {
+      display: flex; align-items: center; justify-content: center;
+      gap: 14px; flex-wrap: wrap; margin-bottom: 56px;
+    }
+    .btn-hero {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 34px; background: var(--clr-primary); color: #000;
+      font-size: 15px; font-weight: 700; border: none; border-radius: var(--radius-md);
+      cursor: pointer; letter-spacing: 0.3px;
+      transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
+      text-decoration: none;
+    }
+    .btn-hero:hover { background: #1aff55; box-shadow: 0 0 32px var(--clr-glow), 0 8px 32px rgba(0,255,65,0.2); transform: translateY(-2px); text-decoration: none; }
+    .btn-hero-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 34px; background: transparent; color: var(--clr-fg);
+      font-size: 15px; font-weight: 500;
+      border: 1px solid var(--clr-border); border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: border-color var(--transition), color var(--transition), background var(--transition);
+      text-decoration: none;
+    }
+    .btn-hero-ghost:hover { border-color: var(--clr-primary); color: var(--clr-primary); background: var(--clr-primary-dim); text-decoration: none; }
+
+    /* Terminal */
+    .terminal-wrap {
+      position: relative; max-width: 700px; margin: 0 auto;
+      border-radius: var(--radius-lg); border: 1px solid var(--clr-border);
+      background: var(--clr-bg-card); overflow: hidden;
+      box-shadow: 0 0 64px rgba(0,255,65,0.07), 0 32px 80px rgba(0,0,0,0.75);
+    }
+    .terminal-bar {
+      display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+      background: var(--clr-surface); border-bottom: 1px solid var(--clr-border);
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-r{background:#ff5f57;} .dot-y{background:#febc2e;} .dot-g{background:#28c840;}
+    .term-title { flex:1; text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--clr-muted); }
+    .terminal-body { padding: 24px; font-family: var(--font-mono); font-size: 13px; min-height: 150px; }
+    .term-line { margin-bottom: 6px; }
+    .term-p { color: var(--clr-primary); }
+    .term-safe   { color: #3fb950; }
+    .term-threat { color: var(--clr-accent); }
+    .term-dim    { color: var(--clr-muted); }
+    .term-cursor { display:inline-block; width:9px; height:14px; background:var(--clr-primary); vertical-align:-2px; animation:blink 1.1s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* === METRICS === */
+    .metrics {
+      position: relative; z-index: 1;
+      padding: 64px 48px; border-top: 1px solid var(--clr-border); border-bottom: 1px solid var(--clr-border);
+      background: var(--clr-bg-card2);
+    }
+    .metrics-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(4,1fr); gap: 32px;
+    }
+    .metric-item { text-align: center; }
+    .metric-num {
+      font-family: var(--font-mono); font-size: clamp(28px,4vw,44px); font-weight: 700;
+      color: var(--clr-primary); text-shadow: 0 0 24px var(--clr-glow);
+      line-height: 1; margin-bottom: 8px;
+    }
+    .metric-label { font-size: 13px; color: var(--clr-muted); font-weight: 500; }
+
+    /* === SHARED SECTION === */
+    section { position:relative; z-index:1; padding: 96px 48px; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+      color: var(--clr-primary); letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: var(--font-mono); font-size: clamp(24px,4vw,38px); font-weight: 700;
+      color: var(--clr-fg); line-height: 1.2; margin-bottom: 16px;
+    }
+    .section-sub { font-size: 16px; color: var(--clr-muted); line-height: 1.7; max-width: 520px; margin-bottom: 48px; }
+
+    /* === FEATURES === */
+    .features-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+    .feature-card {
+      padding: 28px; background: var(--clr-bg-card);
+      border: 1px solid var(--clr-border); border-radius: var(--radius-lg);
+      transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+      position: relative; overflow: hidden; cursor: default;
+    }
+    .feature-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background: linear-gradient(90deg,transparent,var(--clr-primary),transparent);
+      opacity:0; transition:opacity var(--transition);
+    }
+    .feature-card:hover { border-color:rgba(0,255,65,0.28); transform:translateY(-4px); box-shadow: 0 16px 48px rgba(0,0,0,0.5),0 0 28px rgba(0,255,65,0.05); }
+    .feature-card:hover::before { opacity:1; }
+    .feature-icon {
+      width:44px; height:44px; border-radius:var(--radius-md);
+      background:var(--clr-primary-dim); border:1px solid rgba(0,255,65,0.18);
+      display:flex; align-items:center; justify-content:center;
+      margin-bottom:16px; color:var(--clr-primary);
+    }
+    .feature-title { font-family:var(--font-mono); font-size:15px; font-weight:600; color:var(--clr-fg); margin-bottom:10px; }
+    .feature-desc { font-size:13px; color:var(--clr-muted); line-height:1.65; }
+
+    /* === HOW IT WORKS === */
+    .how-grid { display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:center; }
+    .steps-list { display:flex; flex-direction:column; gap:16px; }
+    .step {
+      display:flex; gap:16px; padding:20px 22px;
+      background:var(--clr-bg-card); border:1px solid var(--clr-border); border-radius:var(--radius-lg);
+      transition:border-color var(--transition),background var(--transition); cursor:default;
+    }
+    .step:hover { border-color:rgba(0,255,65,0.18); background:var(--clr-surface); }
+    .step-num { font-family:var(--font-mono); font-size:20px; font-weight:700; color:var(--clr-primary); flex-shrink:0; width:28px; text-shadow:0 0 12px var(--clr-glow); }
+    .step-title { font-family:var(--font-mono); font-size:14px; font-weight:600; color:var(--clr-fg); margin-bottom:6px; }
+    .step-desc { font-size:13px; color:var(--clr-muted); line-height:1.6; }
+
+    .pipeline-card { background:var(--clr-bg-card); border:1px solid var(--clr-border); border-radius:var(--radius-lg); padding:28px; }
+    .pipe-hdr { font-family:var(--font-mono); font-size:11px; color:var(--clr-muted); margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+    .pipe-flow { display:flex; flex-direction:column; gap:10px; }
+    .pipe-node { display:flex; align-items:flex-start; gap:10px; padding:10px 14px; border-radius:var(--radius-md); font-family:var(--font-mono); font-size:12px; line-height:1.5; }
+    .pipe-input   { background:rgba(88,166,255,0.07); border:1px solid rgba(88,166,255,0.18); color:var(--clr-blue); }
+    .pipe-process { background:rgba(0,255,65,0.05); border:1px solid rgba(0,255,65,0.14); color:var(--clr-primary); }
+    .pipe-safe    { background:rgba(63,185,80,0.07); border:1px solid rgba(63,185,80,0.22); color:#3fb950; }
+    .pipe-threat  { background:rgba(248,81,73,0.07); border:1px solid rgba(248,81,73,0.22); color:var(--clr-accent); }
+    .pipe-arrow   { text-align:center; color:var(--clr-muted); font-size:11px; padding:2px 0; font-family:var(--font-mono); }
+    .pipe-split   { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+    /* === MODELS === */
+    .models-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+    .model-card {
+      background:var(--clr-bg-card); border:1px solid var(--clr-border); border-radius:var(--radius-lg);
+      padding:22px; transition:border-color var(--transition),transform var(--transition);
+      position:relative;
+    }
+    .model-card.best { border-color:rgba(0,255,65,0.32); background:linear-gradient(135deg,var(--clr-bg-card),rgba(0,255,65,0.03)); }
+    .model-card:hover { transform:translateY(-3px); }
+    .best-badge {
+      position:absolute; top:-12px; left:50%; transform:translateX(-50%);
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 14px; background:var(--clr-primary); color:#000;
+      font-family:var(--font-mono); font-size:10px; font-weight:700;
+      border-radius:999px; letter-spacing:1px; text-transform:uppercase; white-space:nowrap;
+    }
+    .model-name { font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--clr-fg); margin-bottom:16px; margin-top:8px; }
+    .m-metric { margin-bottom:12px; }
+    .m-label { font-size:11px; color:var(--clr-muted); margin-bottom:4px; display:flex; justify-content:space-between; }
+    .m-val { font-family:var(--font-mono); font-size:11px; color:var(--clr-primary); font-weight:600; }
+    .m-track { width:100%; height:4px; background:var(--clr-border); border-radius:2px; overflow:hidden; }
+    .m-fill { height:100%; border-radius:2px; background:linear-gradient(90deg,#00cc33,var(--clr-primary)); transition:width 1.2s cubic-bezier(0.4,0,0.2,1); }
+
+    /* === DEMO === */
+    .demo-section { background:var(--clr-bg-card2); }
+    .demo-inner { max-width:760px; margin:0 auto; text-align:center; }
+    .demo-textarea {
+      width:100%; padding:16px 20px; background:var(--clr-surface);
+      border:1px solid var(--clr-border); border-radius:var(--radius-lg);
+      color:var(--clr-fg); font-family:var(--font-mono); font-size:13px; line-height:1.6;
+      resize:none; outline:none;
+      transition:border-color var(--transition),box-shadow var(--transition);
+      min-height:100px; margin-bottom:14px;
+    }
+    .demo-textarea:focus { border-color:var(--clr-primary); box-shadow:0 0 0 3px var(--clr-primary-dim); }
+    .demo-examples { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-bottom:22px; }
+    .demo-ex-btn {
+      padding:5px 14px; background:transparent; border:1px solid var(--clr-border); border-radius:999px;
+      color:var(--clr-muted); font-size:12px; font-family:var(--font-mono); cursor:pointer;
+      transition:all var(--transition);
+    }
+    .demo-ex-btn:hover { border-color:var(--clr-primary); color:var(--clr-primary); background:var(--clr-primary-dim); }
+    .btn-demo {
+      padding:13px 40px; background:var(--clr-primary); color:#000;
+      font-size:15px; font-weight:700; border:none; border-radius:var(--radius-md);
+      cursor:pointer; letter-spacing:0.3px; margin-bottom:24px;
+      transition:all var(--transition); display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn-demo:hover { background:#1aff55; box-shadow:0 0 28px var(--clr-glow); }
+    .btn-demo:disabled { opacity:0.5; cursor:not-allowed; }
+    .demo-result {
+      display:none; padding:22px 28px; border-radius:var(--radius-lg);
+      border:1px solid var(--clr-border); text-align:left;
+      animation:slideup 0.35s ease;
+    }
+    @keyframes slideup { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .demo-result.safe   { border-color:rgba(63,185,80,0.32); background:rgba(63,185,80,0.05); }
+    .demo-result.threat { border-color:rgba(248,81,73,0.32); background:rgba(248,81,73,0.05); }
+    .dresult-row { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+    .dresult-verdict { font-family:var(--font-mono); font-size:17px; font-weight:700; }
+    .dresult-verdict.safe   { color:#3fb950; }
+    .dresult-verdict.threat { color:var(--clr-accent); }
+    .dresult-details { display:flex; gap:24px; flex-wrap:wrap; }
+    .dresult-item { font-size:12px; color:var(--clr-muted); }
+    .dresult-val { font-family:var(--font-mono); color:var(--clr-fg); font-weight:600; display:block; }
+    .atk-badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; font-family:var(--font-mono); }
+    .atk-sqli { background:rgba(248,81,73,0.13); color:var(--clr-accent); border:1px solid rgba(248,81,73,0.28); }
+    .atk-safe { background:rgba(63,185,80,0.10); color:#3fb950; border:1px solid rgba(63,185,80,0.28); }
+
+    /* spinner */
+    .spinner { width:15px;height:15px;border:2px solid rgba(0,0,0,0.25);border-top-color:#000;border-radius:50%;animation:spin 0.6s linear infinite;display:none; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* === CTA === */
+    .cta-section {
+      text-align:center;
+      background:radial-gradient(ellipse 60% 50% at 50% 50%, rgba(0,255,65,0.055) 0%, transparent 70%);
+      border-top:1px solid var(--clr-border);
+    }
+    .cta-title { font-family:var(--font-mono); font-size:clamp(26px,5vw,50px); font-weight:700; color:var(--clr-fg); margin-bottom:16px; line-height:1.15; }
+    .cta-hl { color:var(--clr-primary); text-shadow:0 0 32px var(--clr-glow); }
+    .cta-sub { font-size:16px; color:var(--clr-muted); margin:0 auto 48px; max-width:460px; }
+    .cta-actions { display:flex; justify-content:center; gap:14px; flex-wrap:wrap; margin-bottom:40px; }
+    .cta-author { font-size:13px; color:var(--clr-muted); }
+    .cta-author strong { color:var(--clr-fg); }
+
+    /* === FOOTER === */
+    footer {
+      position:relative; z-index:1;
+      padding:28px 48px; border-top:1px solid var(--clr-border);
+      background:var(--clr-bg-card2);
+      display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+    }
+    .footer-brand { font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--clr-primary); text-shadow:0 0 12px var(--clr-glow); }
+    .footer-meta { font-size:12px; color:var(--clr-muted); }
+    .footer-links { display:flex; gap:24px; }
+    .footer-links a { font-size:13px; color:var(--clr-muted); transition:color var(--transition); }
+    .footer-links a:hover { color:var(--clr-primary); text-decoration:none; }
+
+    .reveal { opacity:0; transform:translateY(20px); }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+    @media(prefers-reduced-motion:reduce) {
+      *,*::before,*::after { animation-duration:0.01ms!important; animation-iteration-count:1!important; transition-duration:0.01ms!important; }
+    }
+    @media(max-width:1024px) {
+      .features-grid{grid-template-columns:repeat(2,1fr);}
+      .models-grid{grid-template-columns:repeat(2,1fr);}
+      .how-grid{grid-template-columns:1fr;}
+      .metrics-inner{grid-template-columns:repeat(2,1fr);}
+    }
+    @media(max-width:768px) {
+      .nav-links{display:none;}
+      .nav{padding:14px 20px;}
+      .hero{padding:100px 20px 64px;}
+      section{padding:64px 20px;}
+      .features-grid{grid-template-columns:1fr;}
+      .models-grid{grid-template-columns:1fr 1fr;}
+      .metrics-inner{grid-template-columns:repeat(2,1fr);gap:24px;}
+      footer{flex-direction:column;text-align:center;}
+      .footer-links{justify-content:center;}
+      .metrics{padding:48px 20px;}
+    }
+    @media(max-width:480px) {
+      .models-grid{grid-template-columns:1fr;}
+      .hero-actions{flex-direction:column;align-items:stretch;}
+      .btn-hero,.btn-hero-ghost{text-align:center;justify-content:center;}
+    }
+  </style>
+</head>
+<body>
+<div class="grid-bg" aria-hidden="true"></div>
+
+<!-- NAV -->
+<nav class="nav" role="navigation" aria-label="Primary navigation">
+  <div class="nav-brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    SQLShield
+  </div>
+  <ul class="nav-links" role="list">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how-it-works">How it Works</a></li>
+    <li><a href="#models">Models</a></li>
+    <li><a href="#demo">Live Demo</a></li>
+  </ul>
+  <div class="nav-cta">
+    <a href="/api/docs" class="btn-ghost">API Docs</a>
+    <a href="/" class="btn-primary">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Launch App
+    </a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" aria-labelledby="hero-heading">
+  <div class="hero-content">
+    <div class="hero-badge" aria-label="System status: ML Model Active">
+      <span class="pulse-dot" aria-hidden="true"></span>
+      ML Model Active &middot; 99.74% Accuracy
+    </div>
+    <h1 class="hero-title" id="hero-heading">
+      Detect SQL Attacks<br>
+      <span class="hl">in Milliseconds</span>
+    </h1>
+    <p class="hero-sub">
+      SQLShield uses a Random Forest classifier trained on 30,918 queries to identify SQL injection
+      attempts with near-perfect accuracy&mdash;before they reach your database.
+    </p>
+    <div class="hero-actions">
+      <a href="/" class="btn-hero">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Launch Detector
+      </a>
+      <a href="#demo" class="btn-hero-ghost">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        Try Live Demo
+      </a>
+    </div>
+
+    <!-- Terminal -->
+    <div class="terminal-wrap" role="img" aria-label="Animated terminal showing SQLShield analysing queries">
+      <div class="terminal-bar" aria-hidden="true">
+        <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+        <span class="term-title">sqlshield &mdash; detector</span>
+      </div>
+      <div class="terminal-body" aria-hidden="true">
+        <div class="term-line"><span class="term-p">$ </span><span id="tCmd"></span></div>
+        <div class="term-line" id="tOut" style="display:none;"></div>
+        <div class="term-line" id="tCursor"><span class="term-p">$ </span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- METRICS -->
+<div class="metrics" role="region" aria-label="Key performance metrics">
+  <div class="metrics-inner">
+    <div class="metric-item reveal">
+      <div class="metric-num" data-target="99.74" data-dec="2">0</div>
+      <div class="metric-label">Accuracy %</div>
+    </div>
+    <div class="metric-item reveal">
+      <div class="metric-num" data-target="30918" data-fmt="k">0</div>
+      <div class="metric-label">Training Queries</div>
+    </div>
+    <div class="metric-item reveal">
+      <div class="metric-num" data-target="4">0</div>
+      <div class="metric-label">ML Models Compared</div>
+    </div>
+    <div class="metric-item reveal">
+      <div class="metric-num" data-target="9">0</div>
+      <div class="metric-label">Attack Types Detected</div>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="features" aria-labelledby="features-heading">
+  <div class="section-inner">
+    <div class="section-label" aria-hidden="true">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Capabilities
+    </div>
+    <h2 class="section-title" id="features-heading">Everything you need to<br>defend your database</h2>
+    <p class="section-sub">From single queries to batch analysis, SQLShield covers every attack vector with machine-learning precision.</p>
+    <div class="features-grid">
+
+      <div class="feature-card reveal">
+        <div class="feature-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <div class="feature-title">Real-Time Detection</div>
+        <p class="feature-desc">Analyse any SQL query or user input instantly. Get a verdict, confidence score, and attack classification in &lt;50 ms.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <div class="feature-title">Batch Analysis</div>
+        <p class="feature-desc">Submit up to 20 queries at once via the REST API. Perfect for log analysis, penetration testing, and automated pipelines.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="feature-title">9 Attack Types</div>
+        <p class="feature-desc">Identifies UNION, Boolean, Time-based, Error-based, Stacked Query, Auth Bypass, Obfuscated, Encoded, and Comment-based attacks.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div class="feature-title">Model Comparison</div>
+        <p class="feature-desc">Compare Logistic Regression, Random Forest, Gradient Boosting, and Linear SVM side-by-side with full accuracy, F1, and recall metrics.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div class="feature-title">CSV Export</div>
+        <p class="feature-desc">Export your detection history as a CSV file for compliance reporting, incident response, or further data analysis workflows.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <div class="feature-title">REST API</div>
+        <p class="feature-desc">Fully documented API with rate-limiting and CORS. Integrate SQLShield into any backend, CI pipeline, or WAF in minutes.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works" style="background:var(--clr-bg-card2);" aria-labelledby="how-heading">
+  <div class="section-inner">
+    <div class="section-label" aria-hidden="true">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Process
+    </div>
+    <h2 class="section-title" id="how-heading">How SQLShield Works</h2>
+    <div class="how-grid">
+      <div class="steps-list">
+        <div class="step reveal">
+          <div class="step-num">01</div>
+          <div>
+            <div class="step-title">Input Ingestion &amp; Validation</div>
+            <p class="step-desc">User input is validated, sanitised, and length-checked (max 2,000 chars). Malformed or empty inputs are rejected before the model is invoked.</p>
+          </div>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">02</div>
+          <div>
+            <div class="step-title">TF-IDF Vectorisation</div>
+            <p class="step-desc">The query is transformed using a char-level n-gram TF-IDF vectoriser (n=2&ndash;4, 5,000 features) tuned for SQL syntax patterns and obfuscation.</p>
+          </div>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">03</div>
+          <div>
+            <div class="step-title">Random Forest Classification</div>
+            <p class="step-desc">The vectorised query passes through a 100-estimator Random Forest trained on 24,734 labelled queries, returning a label and probability vector.</p>
+          </div>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">04</div>
+          <div>
+            <div class="step-title">Attack Type Classification</div>
+            <p class="step-desc">A priority-based rule engine classifies SQLi into 9 distinct attack categories for actionable, human-readable threat intelligence.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-card reveal">
+        <div class="pipe-hdr">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          SQLShield ML Pipeline
+        </div>
+        <div class="pipe-flow">
+          <div class="pipe-node pipe-input">&rarr; &nbsp;Raw User Input / SQL Query</div>
+          <div class="pipe-arrow">&darr; validate &amp; clean</div>
+          <div class="pipe-node pipe-process">&#9881; &nbsp;TF-IDF char-ngram Vectoriser (5k features)</div>
+          <div class="pipe-arrow">&darr; transform vector</div>
+          <div class="pipe-node pipe-process">&#127794; &nbsp;Random Forest (100 estimators)</div>
+          <div class="pipe-arrow">&darr; predict + confidence score</div>
+          <div class="pipe-split">
+            <div class="pipe-node pipe-safe">&#10003; BENIGN</div>
+            <div class="pipe-node pipe-threat">&#9888; SQL INJECTION</div>
+          </div>
+          <div class="pipe-arrow">&darr; attack type classifier</div>
+          <div class="pipe-node pipe-process" style="font-size:11px;flex-wrap:wrap;gap:4px;line-height:1.7;">
+            &#128269; UNION &middot; Boolean &middot; Time &middot; Error &middot; Stacked &middot; Auth Bypass &middot; Obfuscated &middot; Encoded &middot; Comment
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODELS -->
+<section id="models" aria-labelledby="models-heading">
+  <div class="section-inner">
+    <div class="section-label" aria-hidden="true">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="6" height="18" rx="1"/><rect x="9" y="8" width="6" height="13" rx="1"/><rect x="16" y="13" width="6" height="8" rx="1"/></svg>
+      Benchmarks
+    </div>
+    <h2 class="section-title" id="models-heading">4 Models. One Winner.</h2>
+    <p class="section-sub">Every model was trained on the same 80/20 split of 30,918 labelled queries. Random Forest came out on top across all metrics.</p>
+    <div class="models-grid" id="modelsGrid"></div>
+  </div>
+</section>
+
+<!-- LIVE DEMO -->
+<section id="demo" class="demo-section" aria-labelledby="demo-heading">
+  <div class="demo-inner section-inner">
+    <div class="section-label" style="justify-content:center;" aria-hidden="true">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+      Interactive Demo
+    </div>
+    <h2 class="section-title" id="demo-heading" style="margin-bottom:12px;">Try it right now</h2>
+    <p class="section-sub" style="margin-left:auto;margin-right:auto;text-align:center;">
+      Enter any SQL query below and see SQLShield classify it live. No setup required.
+    </p>
+    <label for="demoInput" class="sr-only">SQL query or user input to analyse</label>
+    <textarea id="demoInput" class="demo-textarea" rows="4" placeholder="Enter a SQL query or user input to analyse&#8230;" spellcheck="false" autocomplete="off" maxlength="2000"></textarea>
+    <div class="demo-examples" role="group" aria-label="Example SQL queries">
+      <button class="demo-ex-btn" data-q="SELECT * FROM users WHERE id = 1" type="button">Benign SELECT</button>
+      <button class="demo-ex-btn" data-q="' OR 1=1--" type="button">Boolean SQLi</button>
+      <button class="demo-ex-btn" data-q="' UNION SELECT 1,2,3--" type="button">UNION Attack</button>
+      <button class="demo-ex-btn" data-q="'; DROP TABLE users;--" type="button">Stacked Query</button>
+      <button class="demo-ex-btn" data-q="' AND SLEEP(5)--" type="button">Time-based</button>
+      <button class="demo-ex-btn" data-q="admin' OR '1'='1'--" type="button">Auth Bypass</button>
+    </div>
+    <div style="text-align:center;">
+      <button class="btn-demo" id="demoBtn" type="button">
+        <span class="spinner" id="demoSpinner" aria-hidden="true"></span>
+        <svg id="demoIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span id="demoBtnTxt">Analyse Query</span>
+      </button>
+    </div>
+    <div class="demo-result" id="demoResult" role="status" aria-live="polite">
+      <div class="dresult-row">
+        <div class="dresult-verdict" id="dVerdict"></div>
+        <div class="dresult-details">
+          <div class="dresult-item">Confidence<span class="dresult-val" id="dConf"></span></div>
+          <div class="dresult-item">Attack Type<span id="dAtk"></span></div>
+          <div class="dresult-item">Response<span class="dresult-val" id="dTime"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" aria-labelledby="cta-heading">
+  <div class="section-inner" style="text-align:center;">
+    <h2 class="cta-title" id="cta-heading">
+      Stop SQL Injection<br>
+      <span class="cta-hl">Before It Stops You</span>
+    </h2>
+    <p class="cta-sub">Full detection dashboard, model comparison charts, and batch API &mdash; all in one open-source tool.</p>
+    <div class="cta-actions">
+      <a href="/" class="btn-hero">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Open SQLShield
+      </a>
+      <a href="/api/docs" class="btn-hero-ghost">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        View API Docs
+      </a>
+    </div>
+    <p class="cta-author">Built by <strong>Kabir Malik</strong> &middot; B.Tech CSE (Cybersecurity) &middot; 24CSU089<br>The NorthCap University</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>
+    <div class="footer-brand">&#128737; SQLShield</div>
+    <div class="footer-meta">AI-Powered SQL Injection Detection &middot; v1.0.0</div>
+  </div>
+  <div class="footer-links">
+    <a href="/">App</a>
+    <a href="/api/docs">API Docs</a>
+    <a href="/api/models">Model Results</a>
+    <a href="https://github.com/" target="_blank" rel="noopener noreferrer">GitHub</a>
+  </div>
+</footer>
+
+<script>
+/* === Model cards === */
+const MODELS = [
+  {name:"Logistic Regression", acc:0.9951, pre:0.9987, rec:0.9881, f1:0.9934, best:false},
+  {name:"Random Forest",       acc:0.9974, pre:1.0000, rec:0.9930, f1:0.9965, best:true},
+  {name:"Gradient Boosting",   acc:0.9958, pre:0.9987, rec:0.9899, f1:0.9943, best:false},
+  {name:"Linear SVM",          acc:0.9968, pre:0.9987, rec:0.9925, f1:0.9956, best:false},
+];
+const grid = document.getElementById('modelsGrid');
+MODELS.forEach(m => {
+  const keys = ['acc','pre','rec','f1'];
+  const labels = ['Accuracy','Precision','Recall','F1-Score'];
+  const bars = keys.map((k,i) => {
+    const pct = ((m[k]-0.985)/(1-0.985)*100).toFixed(1);
+    return `<div class="m-metric">
+      <div class="m-label"><span>${labels[i]}</span><span class="m-val">${(m[k]*100).toFixed(2)}%</span></div>
+      <div class="m-track"><div class="m-fill" style="width:0%" data-w="${Math.max(5,pct)}%"></div></div>
+    </div>`;
+  }).join('');
+  grid.insertAdjacentHTML('beforeend',`<div class="model-card ${m.best?'best reveal':'reveal'}" role="article" aria-label="${m.name} performance metrics">
+    ${m.best?'<div class="best-badge">&#10003; Active Model</div>':''}
+    <div class="model-name">${m.name}</div>
+    ${bars}
+  </div>`);
+});
+
+/* === Terminal typewriter === */
+const DEMOS = [
+  { cmd:"sqlshield.analyse(\"' OR 1=1--\")", out:'<span class="term-threat">&#9888; SQL INJECTION DETECTED &mdash; Boolean-based [99.87%]</span>' },
+  { cmd:'sqlshield.analyse("SELECT * FROM users WHERE id=1")', out:'<span class="term-safe">&#10003; BENIGN QUERY &mdash; No threat [97.34%]</span>' },
+  { cmd:"sqlshield.analyse(\"' UNION SELECT 1,2,3--\")", out:'<span class="term-threat">&#9888; SQL INJECTION DETECTED &mdash; UNION-based [99.91%]</span>' },
+];
+let di = 0;
+const tCmd = document.getElementById('tCmd');
+const tOut  = document.getElementById('tOut');
+const tCur  = document.getElementById('tCursor');
+
+async function type(el, txt, spd=40) {
+  el.textContent='';
+  for(const c of txt){ el.textContent+=c; await new Promise(r=>setTimeout(r,spd)); }
+}
+
+const noMotion = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+if(!noMotion){
+  (async function loop(){
+    while(true){
+      const d=DEMOS[di++%DEMOS.length];
+      tCmd.textContent=''; tOut.style.display='none'; tCur.style.display='block';
+      await new Promise(r=>setTimeout(r,500));
+      await type(tCmd, d.cmd, 38);
+      await new Promise(r=>setTimeout(r,350));
+      tOut.innerHTML=d.out; tOut.style.display='block';
+      await new Promise(r=>setTimeout(r,2600));
+    }
+  })();
+} else {
+  tCmd.textContent='sqlshield.analyse("...")';
+  tOut.innerHTML='<span class="term-safe">&#10003; BENIGN QUERY [97.34%]</span>';
+  tOut.style.display='block';
+  tCur.style.display='none';
+}
+
+/* === GSAP animations === */
+if(typeof gsap!=='undefined' && !noMotion){
+  gsap.registerPlugin(ScrollTrigger);
+
+  // Hero entrance
+  gsap.from('.hero-badge',     {opacity:0,y:-14,duration:0.5,ease:'power2.out',delay:0.1});
+  gsap.from('.hero-title',     {opacity:0,y:24,duration:0.6,ease:'expo.out',delay:0.25});
+  gsap.from('.hero-sub',       {opacity:0,y:18,duration:0.5,ease:'power2.out',delay:0.42});
+  gsap.from('.hero-actions',   {opacity:0,y:14,duration:0.5,ease:'power2.out',delay:0.56});
+  gsap.from('.terminal-wrap',  {opacity:0,y:30,scale:0.97,duration:0.6,ease:'back.out(1.4)',delay:0.72});
+
+  // Feature grid stagger
+  gsap.from('.feature-card',{
+    opacity:0,scale:0.93,y:14,duration:0.38,
+    stagger:{each:0.06,from:'start'},ease:'back.out(1.4)',
+    scrollTrigger:{trigger:'.features-grid',start:'top 87%',toggleActions:'play none none none'}
+  });
+
+  // Generic scroll reveals
+  document.querySelectorAll('.reveal').forEach(el=>{
+    gsap.from(el,{
+      opacity:0,y:18,duration:0.38,ease:'power1.out',
+      scrollTrigger:{trigger:el,start:'top 91%',toggleActions:'play none none none'},
+      onComplete(){
+        el.querySelectorAll('.m-fill').forEach(b=>{
+          const w=b.getAttribute('data-w');
+          if(w) gsap.to(b,{width:w,duration:1.2,ease:'power2.out',delay:0.15});
+        });
+      }
+    });
+  });
+} else {
+  document.querySelectorAll('.reveal').forEach(el=>{ el.style.opacity=1; el.style.transform='none'; });
+  document.querySelectorAll('.m-fill').forEach(b=>{
+    const w=b.getAttribute('data-w'); if(w) b.style.width=w;
+  });
+}
+
+/* === Metrics counter === */
+function animCount(el){
+  const target=parseFloat(el.dataset.target);
+  const fmt   =el.dataset.fmt;
+  const dec   =parseInt(el.dataset.dec||0);
+  if(noMotion){
+    el.textContent=fmt==='k'?(target/1000).toFixed(1)+'k':target.toFixed(dec);
+    return;
+  }
+  const dur=1700, t0=performance.now();
+  function frame(now){
+    const p=Math.min((now-t0)/dur,1);
+    const e=1-Math.pow(1-p,3);
+    const v=target*e;
+    el.textContent=fmt==='k'?(v/1000).toFixed(1)+'k':v.toFixed(dec);
+    if(p<1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+const mo=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.querySelectorAll('.metric-num').forEach(animCount); mo.disconnect(); } });
+},{threshold:0.3});
+const ms=document.querySelector('.metrics');
+if(ms) mo.observe(ms);
+
+/* === Demo example buttons === */
+document.querySelectorAll('.demo-ex-btn').forEach(b=>{
+  b.addEventListener('click',()=>{ document.getElementById('demoInput').value=b.dataset.q; document.getElementById('demoInput').focus(); });
+});
+
+/* === Live demo analyse === */
+const demoBtn=document.getElementById('demoBtn');
+const demoInput=document.getElementById('demoInput');
+const demoResult=document.getElementById('demoResult');
+const demoSpinner=document.getElementById('demoSpinner');
+const demoIcon=document.getElementById('demoIcon');
+const demoBtnTxt=document.getElementById('demoBtnTxt');
+
+demoBtn.addEventListener('click', async()=>{
+  const q=demoInput.value.trim();
+  if(!q){ demoInput.style.borderColor='var(--clr-accent)'; demoInput.focus(); setTimeout(()=>{ demoInput.style.borderColor=''; },2000); return; }
+  demoBtn.disabled=true; demoSpinner.style.display='block'; demoIcon.style.display='none'; demoBtnTxt.textContent='Analysing\u2026';
+  try{
+    const r=await fetch('/api/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'Request failed');
+    const sqli=d.label==='SQL Injection';
+    document.getElementById('dVerdict').textContent=sqli?'\u26a0 SQL INJECTION DETECTED':'\u2713 BENIGN QUERY';
+    document.getElementById('dVerdict').className='dresult-verdict '+(sqli?'threat':'safe');
+    document.getElementById('dConf').textContent=d.confidence+'%';
+    document.getElementById('dTime').textContent=d.response_ms+' ms';
+    const cls=sqli?'atk-badge atk-sqli':'atk-badge atk-safe';
+    document.getElementById('dAtk').innerHTML=`<span class="${cls}">${sqli?(d.attack_type||'Unknown SQLi'):'No threat'}</span>`;
+    demoResult.className='demo-result '+(sqli?'threat':'safe');
+    demoResult.style.display='block';
+  }catch(err){
+    document.getElementById('dVerdict').textContent='\u26a0 '+(err.message||'Error');
+    document.getElementById('dVerdict').className='dresult-verdict threat';
+    ['dConf','dTime'].forEach(id=>{ document.getElementById(id).textContent='--'; });
+    document.getElementById('dAtk').textContent='--';
+    demoResult.className='demo-result threat'; demoResult.style.display='block';
+  }finally{
+    demoBtn.disabled=false; demoSpinner.style.display='none'; demoIcon.style.display='block'; demoBtnTxt.textContent='Analyse Query';
+  }
+});
+
+demoInput.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.ctrlKey) demoBtn.click(); });
+
+/* === Smooth scroll === */
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click',e=>{ const t=document.querySelector(a.getAttribute('href')); if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth',block:'start'}); } });
+});
+</script>
+</body>
+</html>
