@@ -24,6 +24,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
 app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(32)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024  # 16 KB max request
 
