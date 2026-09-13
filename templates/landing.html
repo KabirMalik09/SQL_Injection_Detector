@@ -286,12 +286,21 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 22px 22px 20px;
-      transition: border-color var(--tr), transform var(--tr);
-      cursor: default;
+      transition: transform 0.25s ease,
+                  border-color 0.25s ease,
+                  box-shadow 0.25s ease,
+                  opacity 0.4s ease;
+      cursor: pointer;
     }
     .attack-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
+      transform: translateY(-8px) scale(1.03);
+      border-color: #58a6ff;
+      box-shadow: 0 20px 40px rgba(88, 166, 255, 0.15),
+                  0 0 0 1px rgba(88, 166, 255, 0.3);
+    }
+    .attack-card:hover .attack-name {
+      color: #58a6ff;
+      transition: color 0.25s ease;
     }
     .attack-top {
       display: flex; align-items: center; justify-content: space-between;
@@ -632,7 +641,6 @@
   .attack-card {
     opacity: 0;
     transform: translateY(18px);
-    transition: opacity 0.4s ease, transform 0.4s ease;
   }
   .attack-card.visible {
     opacity: 1;
