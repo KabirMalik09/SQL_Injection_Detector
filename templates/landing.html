@@ -494,19 +494,19 @@
     <h2 class="sr-only" id="stats-heading">Performance Statistics</h2>
     <div class="stats-grid" role="list">
       <div class="stat-card" role="listitem">
-        <span class="stat-num">99.65%</span>
+        <span class="stat-num" data-target="99.65" data-suffix="%" data-decimals="2" data-duration="1500">99.65%</span>
         <span class="stat-label">F1-Score</span>
       </div>
       <div class="stat-card" role="listitem">
-        <span class="stat-num">0.9993</span>
+        <span class="stat-num" data-target="0.9993" data-suffix="" data-decimals="4" data-duration="1500">0.9993</span>
         <span class="stat-label">AUC Score</span>
       </div>
       <div class="stat-card" role="listitem">
-        <span class="stat-num">30,919</span>
+        <span class="stat-num" data-target="30919" data-suffix="" data-decimals="0" data-duration="2000" data-comma="true">30,919</span>
         <span class="stat-label">Training Samples</span>
       </div>
       <div class="stat-card" role="listitem">
-        <span class="stat-num">9</span>
+        <span class="stat-num" data-target="9" data-suffix="" data-decimals="0" data-duration="800">9</span>
         <span class="stat-label">Attack Types</span>
       </div>
     </div>
@@ -627,78 +627,190 @@
 
 <style>
   .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+
+  /* Attack card stagger — hidden initial state */
+  .attack-card {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .attack-card.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Navbar scroll-blur class */
+  .navbar.scrolled {
+    background: rgba(6, 8, 13, 0.97);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .attack-card { opacity:1; transform:none; transition:none; }
+  }
 </style>
 
 <script>
-  /* ── Terminal typewriter ── */
-  const SEQUENCES = [
-    [
-      { cmd: 'sqlshield.analyse("\' OR 1=1 --")', out: '<span class="t-threat">&#9888; SQL INJECTION DETECTED &mdash; Boolean-based [90.0%]</span>' },
-      { cmd: 'sqlshield.analyse("SELECT * FROM users WHERE id=1")', out: '<span class="t-safe">&#10003; BENIGN QUERY [94.3%]</span>' },
-    ],
-    [
-      { cmd: 'sqlshield.analyse("\' UNION SELECT 1,2 --")', out: '<span class="t-threat">&#9888; SQL INJECTION DETECTED &mdash; UNION-based [99.1%]</span>' },
-      { cmd: 'sqlshield.analyse("SELECT id, name FROM products")', out: '<span class="t-safe">&#10003; BENIGN QUERY [97.8%]</span>' },
-    ],
+  const noMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ================================================================
+     1. TERMINAL TYPEWRITER — 3-query loop
+     ================================================================ */
+  const QUERIES = [
+    {
+      cmd: "sqlshield.analyse(\"' OR 1=1 --\")",
+      out: '<span class="t-threat">&#9888; SQL INJECTION DETECTED &mdash; Boolean-based [90.0%]</span>',
+    },
+    {
+      cmd: "sqlshield.analyse(\"' UNION SELECT 1,2 --\")",
+      out: '<span class="t-threat">&#9888; SQL INJECTION DETECTED &mdash; UNION-based [99.1%]</span>',
+    },
+    {
+      cmd: 'sqlshield.analyse("SELECT * FROM users WHERE id=1")',
+      out: '<span class="t-safe">&#10003; BENIGN &mdash; No threat detected [97.3%]</span>',
+    },
   ];
 
-  const noMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const tCmd  = document.getElementById("tCmd");
-  const tOut  = document.getElementById("termOutput");
-  const tCmd2 = document.getElementById("tCmd2");
-  const tOut2 = document.getElementById("termOutput2");
-  const tNext = document.getElementById("termNext");
-  const tCursorLine = document.getElementById("termCursorLine");
+  const tCmd       = document.getElementById('tCmd');
+  const tOut       = document.getElementById('termOutput');
+  const tCmd2      = document.getElementById('tCmd2');
+  const tOut2      = document.getElementById('termOutput2');
+  const tNext      = document.getElementById('termNext');
+  const tCursorLine = document.getElementById('termCursorLine');
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function typeIn(el, text, speed) {
+    el.textContent = '';
+    for (const ch of text) { el.textContent += ch; await sleep(speed); }
+  }
 
   if (noMotion) {
-    tCmd.textContent = 'sqlshield.analyse("\' OR 1=1 --")';
-    tOut.innerHTML = '<span class="t-threat">&#9888; SQL INJECTION DETECTED &mdash; Boolean-based [90.0%]</span>';
-    tOut.style.display = "block";
-    tCursorLine.style.display = "none";
+    /* Reduced motion: show final state immediately */
+    tCmd.textContent = QUERIES[0].cmd;
+    tOut.innerHTML   = QUERIES[0].out;
+    tOut.style.display = 'block';
+    tNext.style.display = 'block';
+    tCmd2.textContent = QUERIES[1].cmd;
+    tOut2.innerHTML   = QUERIES[1].out;
+    tOut2.style.display = 'block';
+    tCursorLine.style.display = 'none';
   } else {
-    let seqIdx = 0;
-
-    async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-    async function typeIn(el, text, speed) {
-      el.textContent = "";
-      for (const ch of text) {
-        el.textContent += ch;
-        await sleep(speed);
-      }
-    }
-
-    async function runLoop() {
+    (async function termLoop() {
       while (true) {
-        const seq = SEQUENCES[seqIdx % SEQUENCES.length];
-        seqIdx++;
+        for (let i = 0; i < QUERIES.length; i++) {
+          /* ── reset ── */
+          tCmd.textContent  = ''; tOut.innerHTML  = ''; tOut.style.display  = 'none';
+          tCmd2.textContent = ''; tOut2.innerHTML = ''; tOut2.style.display = 'none';
+          tNext.style.display = 'none';
+          tCursorLine.style.display = 'block';
 
-        // Reset
-        tCmd.textContent = ""; tOut.innerHTML = ""; tOut.style.display = "none";
-        tCmd2.textContent = ""; tOut2.innerHTML = ""; tOut2.style.display = "none";
-        tNext.style.display = "none";
-        tCursorLine.style.display = "block";
+          /* ── type query i ── */
+          await sleep(400);
+          await typeIn(tCmd, QUERIES[i].cmd, 34);
+          await sleep(280);
+          tOut.innerHTML = QUERIES[i].out;
+          tOut.style.display = 'block';
 
-        // First command
-        await sleep(500);
-        await typeIn(tCmd, seq[0].cmd, 36);
-        await sleep(320);
-        tOut.innerHTML = seq[0].out;
-        tOut.style.display = "block";
+          /* ── type next query (i+1) if exists, else wrap ── */
+          const next = QUERIES[(i + 1) % QUERIES.length];
+          await sleep(800);
+          tNext.style.display = 'block';
+          await typeIn(tCmd2, next.cmd, 34);
+          await sleep(280);
+          tOut2.innerHTML = next.out;
+          tOut2.style.display = 'block';
 
-        // Second command
-        await sleep(900);
-        tNext.style.display = "block";
-        await typeIn(tCmd2, seq[1].cmd, 36);
-        await sleep(320);
-        tOut2.innerHTML = seq[1].out;
-        tOut2.style.display = "block";
-
-        await sleep(3000);
+          /* ── pause 2s then advance ── */
+          await sleep(2000);
+          i++; /* skip next since we already showed it as the 2nd line */
+        }
       }
+    })();
+  }
+
+  /* ================================================================
+     2. STAT COUNT-UP — IntersectionObserver
+     ================================================================ */
+  function animateCount(el) {
+    const target   = parseFloat(el.dataset.target);
+    const suffix   = el.dataset.suffix || '';
+    const decimals = parseInt(el.dataset.decimals) || 0;
+    const duration = parseInt(el.dataset.duration) || 1500;
+    const comma    = el.dataset.comma === 'true';
+    const start    = performance.now();
+
+    function fmt(v) {
+      let s = v.toFixed(decimals);
+      if (comma) s = parseFloat(s).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return s + suffix;
     }
 
-    runLoop();
+    if (noMotion) { el.textContent = fmt(target); return; }
+
+    function tick(now) {
+      const elapsed  = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      /* ease-out cubic */
+      const eased    = 1 - Math.pow(1 - progress, 3);
+      el.textContent = fmt(target * eased);
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  const statsGrid = document.querySelector('.stats-grid');
+  if (statsGrid) {
+    const statsObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          statsGrid.querySelectorAll('.stat-num[data-target]').forEach(animateCount);
+          statsObserver.disconnect();
+        }
+      });
+    }, { threshold: 0.3 });
+    statsObserver.observe(statsGrid);
+  }
+
+  /* ================================================================
+     3. ATTACK CARDS STAGGER FADE-IN — IntersectionObserver
+     ================================================================ */
+  const attackCards = document.querySelectorAll('.attack-card');
+  if (attackCards.length && !noMotion) {
+    const cardObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          attackCards.forEach(function(card, idx) {
+            setTimeout(function() {
+              card.classList.add('visible');
+            }, idx * 100);
+          });
+          cardObserver.disconnect();
+        }
+      });
+    }, { threshold: 0.1 });
+    /* observe the grid wrapper */
+    const grid = document.querySelector('.attacks-grid');
+    if (grid) cardObserver.observe(grid);
+  } else {
+    /* No motion / no JS: make all visible immediately */
+    attackCards.forEach(function(c) { c.classList.add('visible'); });
+  }
+
+  /* ================================================================
+     4. NAVBAR SCROLL BLUR
+     ================================================================ */
+  var navbar = document.querySelector('.navbar');
+  if (navbar) {
+    var scrolled = false;
+    window.addEventListener('scroll', function() {
+      var shouldScroll = window.scrollY > 50;
+      if (shouldScroll !== scrolled) {
+        scrolled = shouldScroll;
+        navbar.classList.toggle('scrolled', scrolled);
+      }
+    }, { passive: true });
   }
 </script>
 </body>
