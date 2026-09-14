@@ -6,7 +6,14 @@
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Deployed on Render](https://img.shields.io/badge/Live-Render-46E3B7?logo=render)
 
-🌐 **Live Demo:** [https://sql-injection-detection-project.onrender.com](https://sql-injection-detection-project.onrender.com/)
+## 🌐 Live Links
+
+| | Link |
+|---|---|
+| 🚀 **Landing Page** | https://sql-injection-detection-project.onrender.com/landing |
+| 🔍 **Live Detector** | https://sql-injection-detection-project.onrender.com |
+| 📖 **API Docs** | https://sql-injection-detection-project.onrender.com/api/docs |
+| 💻 **GitHub** | https://github.com/KabirMalik09/SQL_Injection_Detector |
 
 > **Author:** Kabir Malik (24CSU089) · B.Tech CSE (Cybersecurity) · The NorthCap University
 
