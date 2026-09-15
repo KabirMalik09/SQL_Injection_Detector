@@ -22,7 +22,9 @@ const analyseBtn      = document.getElementById("analyseBtn");
 const analyseBtnText  = document.getElementById("analyseBtnText");
 const analyseSpinner  = document.getElementById("analyseSpinner");
 
-const resultCard      = document.getElementById("resultCard");
+// Dashboard result elements
+const resultCard      = document.getElementById("resultCard");       // the d-result-content div
+const resultEmptyState= document.getElementById("resultEmptyState"); // empty placeholder
 const verdictPanel    = document.getElementById("verdictPanel");
 const verdictIcon     = document.getElementById("verdictIcon");
 const verdictLabel    = document.getElementById("verdictLabel");
@@ -41,16 +43,15 @@ const toastContainer  = document.getElementById("toastContainer");
 
 const modelTableBody  = document.getElementById("modelTableBody");
 
-// FIX 2 — batch mode
-const batchToggleBtn  = document.getElementById("batchToggleBtn");
-const batchToggleIcon = document.getElementById("batchToggleIcon");
-const batchToggleLbl  = document.getElementById("batchToggleLabel");
+// Batch mode — now uses tab buttons
+const batchToggleBtn  = document.getElementById("tabBatchToggle");  // new tab btn
+const tabSingle       = document.getElementById("tabSingle");
 const batchHint       = document.getElementById("batchHint");
 const batchResultCard = document.getElementById("batchResultCard");
 const batchResultBody = document.getElementById("batchResultBody");
 const batchResultCount= document.getElementById("batchResultCount");
 
-// FIX 6 — copy result
+// Copy result
 const copyResultBtn   = document.getElementById("copyResultBtn");
 const copyTooltip     = document.getElementById("copyTooltip");
 
@@ -66,64 +67,80 @@ let lastResultData = null;
 // Batch mode flag
 let isBatchMode = false;
 
-// ── FIX 2 — Batch mode toggle ────────────────────────────────────────────────
-batchToggleBtn.addEventListener("click", () => {
-  isBatchMode = !isBatchMode;
-  batchToggleBtn.setAttribute("aria-pressed", String(isBatchMode));
-  batchToggleBtn.classList.toggle("batch-active", isBatchMode);
-  batchToggleIcon.textContent  = isBatchMode ? "📦" : "⚡";
-  batchToggleLbl.textContent   = isBatchMode ? "Batch Mode" : "Single Query";
-  batchHint.classList.toggle("hidden", !isBatchMode);
+// ── Batch mode toggle — tab buttons ──────────────────────────────────────────
+function switchToBatch() {
+  isBatchMode = true;
+  if (batchToggleBtn) batchToggleBtn.classList.add("active");
+  if (tabSingle) tabSingle.classList.remove("active");
+  if (batchHint) batchHint.classList.remove("hidden");
 
   const queryLbl = document.getElementById("queryInputLabel");
-  if (isBatchMode) {
-    queryInput.placeholder = "Enter one query per line (max 20)…";
-    queryInput.rows = 8;
-    queryLbl.textContent = "Enter SQL Queries (one per line)";
-  } else {
-    queryInput.placeholder = "Enter a SQL query or web input to analyse…";
-    queryInput.rows = 5;
-    queryLbl.textContent = "Enter SQL Query or Web Input";
-  }
+  if (queryLbl) queryLbl.textContent = "Enter SQL Queries (one per line)";
+  queryInput.placeholder = "Enter one query per line (max 20)\u2026";
+  queryInput.rows = 8;
 
-  // Hide single-mode result card when switching to batch
-  if (isBatchMode) {
-    resultCard.classList.add("hidden");
-    resultCard.classList.remove("visible");
-  } else {
-    batchResultCard.classList.add("hidden");
-  }
+  // Hide single-mode result, show empty state
+  if (resultCard) resultCard.classList.add("hidden");
+  if (resultEmptyState) resultEmptyState.classList.remove("hidden");
+
+  // Update button label
+  if (analyseBtnText) analyseBtnText.textContent = "Analyse Batch";
 
   charCounter.textContent = "0 / 2000";
-  charCounter.className   = "char-counter";
-  queryInput.value        = "";
+  queryInput.value = "";
   clearInputError();
-});
+}
+
+function switchToSingle() {
+  isBatchMode = false;
+  if (tabSingle) tabSingle.classList.add("active");
+  if (batchToggleBtn) batchToggleBtn.classList.remove("active");
+  if (batchHint) batchHint.classList.add("hidden");
+
+  const queryLbl = document.getElementById("queryInputLabel");
+  if (queryLbl) queryLbl.textContent = "Enter SQL Query or Web Input";
+  queryInput.placeholder = "Enter a SQL query or web input to analyse\u2026";
+  queryInput.rows = 6;
+
+  // Hide batch results
+  if (batchResultCard) batchResultCard.classList.add("hidden");
+
+  // Update button label
+  if (analyseBtnText) analyseBtnText.textContent = "Analyze Query";
+
+  charCounter.textContent = "0 / 2000";
+  queryInput.value = "";
+  clearInputError();
+}
+
+if (batchToggleBtn) batchToggleBtn.addEventListener("click", switchToBatch);
+if (tabSingle) tabSingle.addEventListener("click", switchToSingle);
 
 // ── Char counter ─────────────────────────────────────────────────────────────
 queryInput.addEventListener("input", () => {
   if (isBatchMode) {
-    // In batch mode, count lines
     const lines = queryInput.value.split("\n").filter(l => l.trim() !== "");
     charCounter.textContent = `${lines.length} line${lines.length !== 1 ? "s" : ""} / 20 max`;
-    charCounter.className   = "char-counter";
     if (lines.length > 20) {
       charCounter.classList.add("error");
       analyseBtn.disabled = true;
     } else {
+      charCounter.classList.remove("error", "warn");
       analyseBtn.disabled = false;
     }
   } else {
     const len = queryInput.value.length;
     charCounter.textContent = `${len} / 2000`;
-    charCounter.className   = "char-counter";
     if (len > 2000) {
       charCounter.classList.add("error");
+      charCounter.classList.remove("warn");
       analyseBtn.disabled = true;
     } else if (len > 1700) {
       charCounter.classList.add("warn");
+      charCounter.classList.remove("error");
       analyseBtn.disabled = false;
     } else {
+      charCounter.classList.remove("error", "warn");
       analyseBtn.disabled = false;
     }
   }
@@ -136,9 +153,9 @@ queryInput.addEventListener("input", () => {
 // ── Example buttons ─────────────────────────────────────────────────────────
 document.querySelectorAll(".btn-example").forEach((btn) => {
   btn.addEventListener("click", () => {
-    const key = btn.dataset.example;
-    if (EXAMPLES[key]) {
-      queryInput.value = EXAMPLES[key];
+    const query = btn.dataset.query;
+    if (query) {
+      queryInput.value = query;
       queryInput.dispatchEvent(new Event("input"));
       queryInput.focus();
     }
@@ -291,21 +308,20 @@ function renderBatchResults(results) {
 function setLoadingState(loading) {
   analyseBtn.disabled        = loading;
   analyseSpinner.classList.toggle("hidden", !loading);
+  const analyseIcon = document.getElementById("analyseIcon");
+  if (analyseIcon) analyseIcon.style.display = loading ? "none" : "";
   if (loading) {
-    analyseBtnText.textContent = isBatchMode ? "Analysing batch…" : "Analysing…";
+    analyseBtnText.textContent = isBatchMode ? "Analysing batch\u2026" : "Analysing\u2026";
   } else {
-    analyseBtnText.textContent = isBatchMode ? "Analyse Batch" : "Analyse Query";
+    analyseBtnText.textContent = isBatchMode ? "Analyse Batch" : "Analyze Query";
   }
 }
 
 // ── Input error helpers ──────────────────────────────────────────────────────
 function setInputError(msg) {
-  queryInput.classList.remove("error",
-    "animate__animated", "animate__shakeX");
-  // Force reflow so the animation re-triggers even if already applied
+  queryInput.classList.remove("error");
   void queryInput.offsetWidth;
-  queryInput.classList.add("error",
-    "animate__animated", "animate__shakeX");
+  queryInput.classList.add("error");
   inputErrorMsg.textContent = msg;
 }
 
@@ -314,15 +330,15 @@ function clearInputError() {
   inputErrorMsg.textContent = "";
 }
 
-// ── FIX 1 — Show result card (benign vs SQLi state correctly handled) ─────────
+// ── Show result (dashboard card style) ─────────────────────────────────────
 function showResult(data) {
   const isSqli = data.label === "SQL Injection";
   const conf   = data.confidence;  // already a percentage
 
-  // Verdict panel — FIX 1: correctly applies .sqli vs .benign class
-  verdictPanel.className    = `verdict-panel ${isSqli ? "sqli" : "benign"}`;
-  verdictIcon.textContent   = isSqli ? "⚠" : "✓";
-  verdictLabel.textContent  = isSqli ? "SQL INJECTION\nDETECTED" : "✓ BENIGN QUERY";
+  // Verdict panel
+  verdictPanel.className    = `d-verdict-panel ${isSqli ? "sqli" : "benign"}`;
+  verdictIcon.textContent   = isSqli ? "\u26A0" : "\u2713";
+  verdictLabel.textContent  = isSqli ? "SQL INJECTION\nDETECTED" : "BENIGN QUERY";
   verdictLabel.style.whiteSpace = "pre-line";
   verdictSublabel.textContent = isSqli
     ? "Malicious pattern detected"
@@ -331,26 +347,23 @@ function showResult(data) {
   // Confidence colouring
   const confClass = conf >= 80 ? "high" : conf >= 60 ? "medium" : "low";
   confVal.textContent = `${conf.toFixed(1)}%`;
-  confVal.className   = `confidence-val ${confClass}`;
+  confVal.className   = `rs-val conf-val ${isSqli ? "sqli" : "benign"} ${confClass}`;
   confBar.style.width = `${conf}%`;
-  confBar.className   = `confidence-bar ${confClass}`;
+  confBar.style.background = isSqli ? "var(--red)" : "var(--green)";
   confBar.setAttribute("aria-valuenow", conf);
 
-  // Attack type badge
+  // Attack type
   const badgeClass = isSqli ? "badge-sqli" : "badge-benign";
   attackBadge.textContent = data.attack_type;
-  attackBadge.className   = `badge ${badgeClass}`;
+  attackBadge.className   = `rs-val attack-val badge ${badgeClass}`;
 
   // Response time
   responseTime.textContent = `${data.response_ms} ms`;
 
-  // Show card with Animate.css fadeInUp
+  // Show result card, hide empty state
+  if (resultEmptyState) resultEmptyState.classList.add("hidden");
   resultCard.classList.remove("hidden");
-  resultCard.classList.remove("animate__animated", "animate__fadeInUp");
-  // Force reflow so animation restarts every prediction
-  void resultCard.offsetWidth;
-  resultCard.classList.add("visible", "animate__animated", "animate__fadeInUp");
-  resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  resultCard.classList.add("animate__animated", "animate__fadeIn");
 }
 
 // ── FIX 6 — Copy result button ───────────────────────────────────────────────
@@ -557,7 +570,7 @@ function renderModelChart(models) {
       { name: "F1-Score (%)", data: f1s },
       { name: "Accuracy (%)", data: accs },
     ],
-    colors: ["#58a6ff", "#3fb950"],
+    colors: ["#3b82f6", "#10b981"],
     xaxis: {
       categories: labels,
       labels: {
@@ -665,22 +678,51 @@ function escHtml(str) {
   renderHistory();
   renderEvalImages();
 
-  // UPGRADE 3 — AutoAnimate on history tbody
+  // AutoAnimate on history tbody
   if (typeof autoAnimate !== "undefined") {
     autoAnimate(historyBody);
   }
+
+  // Keyboard shortcut: Ctrl+K focuses search
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      e.preventDefault();
+      const s = document.getElementById("d-search-input");
+      if (s) s.focus();
+    }
+  });
+
+  // Highlight active sidebar nav item on scroll
+  const sections = [
+    { id: "detectionCard", nav: "nav-analyze" },
+    { id: "modelComparisonCard", nav: "nav-performance" },
+    { id: "modelEvalCard", nav: "nav-eval" },
+    { id: "historyCard", nav: "nav-history" },
+  ];
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        document.querySelectorAll(".d-nav-item").forEach(n => n.classList.remove("active"));
+        const s = sections.find(s => s.id === entry.target.id);
+        if (s) {
+          const nav = document.getElementById(s.nav);
+          if (nav) nav.classList.add("active");
+        }
+      }
+    });
+  }, { threshold: 0.3 });
+  sections.forEach(s => {
+    const el = document.getElementById(s.id);
+    if (el) observer.observe(el);
+  });
 
   // Update status dot based on model availability
   const statusDot  = document.getElementById("statusDot");
   const statusText = document.getElementById("statusText");
   fetch("/api/models").then((r) => {
     const online = r.ok;
-    if (statusDot) {
-      statusDot.classList.toggle("offline", !online);
-    }
-    if (statusText) {
-      statusText.textContent = online ? "Model Active" : "Model Offline";
-    }
+    if (statusDot)  statusDot.classList.toggle("offline", !online);
+    if (statusText) statusText.textContent = online ? "Model Active" : "Model Offline";
   }).catch(() => {
     if (statusDot)  statusDot.classList.add("offline");
     if (statusText) statusText.textContent = "Model Offline";
