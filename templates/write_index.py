@@ -80,9 +80,9 @@ html = """\
           <span id="statusText">Checking model...</span>
         </div>
         <div class="d-user-info">
-          <div class="d-user-name">SQLShield</div>
+          <div class="d-user-name">Kabir Malik</div>
         </div>
-        <div class="d-avatar" aria-hidden="true">&#128737;</div>
+        <div class="d-avatar" aria-hidden="true">KM</div>
       </div>
     </header>
 
@@ -290,7 +290,7 @@ html = """\
     </div><!-- /d-content -->
 
     <footer class="d-footer" role="contentinfo">
-      <span>SQLShield v1.0.0</span>
+      <span>Kabir Malik &middot; SQLShield v1.0.0</span>
       <div class="d-footer-links">
         <a href="https://github.com/KabirMalik09/SQL_Injection_Detector" target="_blank" rel="noopener noreferrer">GitHub</a>
         <a href="/api/docs" target="_blank" rel="noopener noreferrer">API Docs</a>
