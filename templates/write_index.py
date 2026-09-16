@@ -1,3 +1,5 @@
+
+html = """\
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -143,7 +145,7 @@
             </div>
             <button class="d-analyse-btn" id="analyseBtn" type="button" aria-label="Analyse the entered query">
               <span class="d-spinner hidden" id="analyseSpinner" aria-hidden="true"></span>
-              <svg id="analyseIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               <span id="analyseBtnText">Analyze Query</span>
             </button>
             <div class="d-analyse-hint">Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to analyze</div>
@@ -304,3 +306,9 @@
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
+"""
+
+with open("templates/index.html", "w", encoding="utf-8") as f:
+    f.write(html)
+
+print("Written OK, lines:", html.count("\\n"))
