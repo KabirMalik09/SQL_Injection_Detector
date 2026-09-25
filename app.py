@@ -43,6 +43,8 @@ limiter = Limiter(
     app=app,
     default_limits=["200 per hour", "40 per minute"],
     storage_uri="memory://",
+    headers_enabled=True,          # send X-RateLimit-* headers
+    default_limits_exempt_when=lambda: False,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -204,7 +206,8 @@ def set_security_headers(response):
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src https://fonts.gstatic.com; "
-        "img-src 'self' data: blob:;"
+        "img-src 'self' data: blob:; "
+        "connect-src 'self';"
     )
     return response
 
@@ -413,6 +416,11 @@ def handle_generic_error(e):
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({"error": "Endpoint not found."}), 404
+
+
+@app.errorhandler(403)
+def forbidden(e):
+    return jsonify({"error": "Request forbidden. You may have hit a rate limit or security restriction."}), 403
 
 
 @app.errorhandler(429)
