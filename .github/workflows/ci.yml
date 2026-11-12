@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python 3.11 ────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── 3. Install dependencies ───────────────────────────────────────────────
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── 4. Train model (ensures models/model.joblib exists for tests) ─────────
+      #        Uses the committed data/Modified_SQL_Dataset.csv.
+      #        Only the 3 required MLflow runs are executed; full training is fast.
+      - name: Train model
+        run: python train.py
+
+      # ── 5. Run pytest ─────────────────────────────────────────────────────────
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+      # ── 6. Build Docker image ─────────────────────────────────────────────────
+      - name: Build Docker image
+        run: docker build -t sqlshield:ci .
+

@@ -19,7 +19,16 @@ ENV/
 .env
 .env.local
 
-# Do NOT ignore models/ — pkl files are <15MB, committed for deployment
+# MLflow tracking artefacts (can be large; re-generate with train.py)
+mlruns/
+
+# Agent configuration (not part of the project source)
+.agents/
+
+# Compressed archives
+files.zip
+
+# Do NOT ignore models/ — pkl/joblib files are <15 MB, committed for deployment
 # Do NOT ignore data/ — CSV needed for reproducibility
 
 # Jupyter
@@ -36,7 +45,7 @@ notebooks/.ipynb_checkpoints/
 .DS_Store
 Thumbs.db
 
-# Flask sessions
+# Flask sessions (legacy)
 flask_session/
 
 # Logs
