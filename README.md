@@ -1,4 +1,7 @@
 # SQLShield 🛡️
+
+![CI](https://github.com/KabirMalik09/SQL_Injection_Detector/actions/workflows/ci.yml/badge.svg)
+
 > AI-Powered SQL Injection Detection System  
 > CSL236 End-Term Project — Kabir Malik (24CSU089), The NorthCap University
 

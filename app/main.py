@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/main.py — SQLShield FastAPI Backend
 AI-Powered SQL Injection Detection System
 Author: Kabir Malik (24CSU089), The NorthCap University
@@ -249,9 +249,9 @@ async def security_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
         "font-src https://fonts.gstatic.com; "
-        "img-src 'self' data: blob:; "
+                "img-src 'self' data: blob: https://fastapi.tiangolo.com; "
         "connect-src 'self';"
     )
     return response
