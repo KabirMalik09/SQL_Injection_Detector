@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 import warnings
 from pathlib import Path
@@ -218,6 +219,7 @@ def run_mlflow_experiments(vec, X_tr, X_te, y_tr, y_te) -> list[dict]:
     All use the SAME train/test split (random_state=42, stratified).
     """
     print(f"\n[3/6] MLflow experiment: '{MLFLOW_EXPERIMENT}'")
+    shutil.rmtree("mlruns/_tmp", ignore_errors=True)
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
     runs = []

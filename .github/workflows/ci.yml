@@ -30,7 +30,9 @@ jobs:
       #        Uses the committed data/Modified_SQL_Dataset.csv.
       #        Only the 3 required MLflow runs are executed; full training is fast.
       - name: Train model
-        run: python train.py
+        run: |
+          rm -rf mlruns
+          python train.py
 
       # ── 5. Run pytest ─────────────────────────────────────────────────────────
       - name: Run tests
