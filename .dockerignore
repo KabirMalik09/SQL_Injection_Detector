@@ -1,0 +1,29 @@
+# ── Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# ── Secrets — NEVER bake into the image
+.env
+.env.*
+
+# ── Version control
+.git/
+.gitignore
+
+# ── MLflow run artefacts (re-generated at train time)
+mlruns/
+
+# ── Agent / IDE configs
+.agents/
+.vscode/
+.idea/
+
+# ── Compressed archives
+files.zip
+
+# ── Test / CI artefacts
+.pytest_cache/
+htmlcov/
+.coverage
+
