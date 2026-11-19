@@ -10,7 +10,7 @@ html = """\
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+  <link rel="stylesheet" href="/static/css/dashboard.css" />
 </head>
 <body>
 
@@ -303,7 +303,7 @@ html = """\
 
 <div class="d-toast-container" id="toastContainer" aria-live="assertive" aria-atomic="true"></div>
 <script src="https://cdn.jsdelivr.net/npm/@formkit/auto-animate@0.8.2/index.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="/static/js/main.js"></script>
 </body>
 </html>
 """

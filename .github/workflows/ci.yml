@@ -24,7 +24,7 @@ jobs:
 
       # ── 3. Install dependencies ───────────────────────────────────────────────
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-train.txt
 
       # ── 4. Train model (ensures models/model.joblib exists for tests) ─────────
       #        Uses the committed data/Modified_SQL_Dataset.csv.

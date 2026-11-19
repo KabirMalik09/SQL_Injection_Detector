@@ -279,6 +279,7 @@ async def landing(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
 
 
+@app.get("/api/docs", include_in_schema=False)
 @app.get("/api/docs-page", include_in_schema=False)
 async def api_docs_page(request: Request):
     """Render the HTML API documentation page (legacy route kept)."""
