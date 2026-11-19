@@ -8,6 +8,7 @@
 SQLShield is a production-grade machine-learning service that classifies SQL query strings as **benign** or **malicious (SQL injection)** in real time. It exposes a FastAPI REST API, an interactive Swagger UI, and a rich HTML dashboard — all backed by a scikit-learn TF-IDF + ML pipeline tracked with MLflow.
 
 ---
+Live link : https://sql-injection-detection-project.onrender.com/landing
 
 ## Architecture Overview
 
