@@ -177,6 +177,25 @@ queryInput.addEventListener("keydown", (e) => {
 });
 
 // ── Single analysis ─────────────────────────────────────────────────────────
+// Queries are sent base64-encoded: the hosting edge (Cloudflare WAF) blocks
+// request bodies that contain obvious SQL injection with a 403 before they
+// reach the API, which would stop the detector from ever seeing them.
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin);
+}
+
+async function apiErrorMessage(res) {
+  if (res.status === 403) {
+    return "Request blocked by the hosting firewall before reaching the detector (HTTP 403).";
+  }
+  const errData = await res.json().catch(() => ({}));
+  const detail = Array.isArray(errData.detail) ? errData.detail[0]?.msg : errData.detail;
+  return errData.error || detail || `HTTP ${res.status}`;
+}
+
 async function runAnalysis() {
   const query = queryInput.value.trim();
 
@@ -196,12 +215,11 @@ async function runAnalysis() {
     const res  = await fetch("/api/predict", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ query }),
+      body:    JSON.stringify({ query_b64: toBase64(query) }),
     });
 
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `HTTP ${res.status}`);
+      throw new Error(await apiErrorMessage(res));
     }
 
     const data = await res.json();
@@ -239,12 +257,11 @@ async function runBatchAnalysis() {
     const res = await fetch("/api/predict/batch", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ queries: lines }),
+      body:    JSON.stringify({ queries_b64: lines.map(toBase64) }),
     });
 
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `HTTP ${res.status}`);
+      throw new Error(await apiErrorMessage(res));
     }
 
     const data = await res.json();

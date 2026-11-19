@@ -5,13 +5,43 @@ Author: Kabir Malik (24CSU089), The NorthCap University
 
 from __future__ import annotations
 
-from typing import Optional
+import base64
+import binascii
+from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+def _b64_to_text(value: Any) -> str:
+    """Decode a base64 (standard alphabet) UTF-8 string, or raise ValueError."""
+    if not isinstance(value, str):
+        raise ValueError("base64 value must be a string")
+    try:
+        return base64.b64decode(value, validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError) as exc:
+        raise ValueError("invalid base64 / UTF-8 payload") from exc
+
+
+# Why the *_b64 fields exist: the hosted app sits behind a Cloudflare WAF that
+# rejects request bodies containing obvious SQL injection (e.g. stacked queries
+# like "1; DROP TABLE users --") with a 403 before they reach this API. The
+# dashboard therefore sends queries base64-encoded. The plain fields keep
+# working for direct API clients. Decoded values go through the same
+# length validation as plain ones.
 
 
 class PredictRequest(BaseModel):
-    """Body expected by POST /api/predict."""
+    """Body expected by POST /api/predict: `query` or `query_b64`."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _decode_b64(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "query_b64" in data:
+            if "query" in data:
+                raise ValueError("send either 'query' or 'query_b64', not both")
+            data = {**data, "query": _b64_to_text(data["query_b64"])}
+            data.pop("query_b64")
+        return data
 
     query: str = Field(
         ...,
@@ -39,6 +69,21 @@ class PredictResponse(BaseModel):
 
 
 class BatchPredictRequest(BaseModel):
+    """Body expected by POST /api/predict/batch: `queries` or `queries_b64`."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _decode_b64(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "queries_b64" in data:
+            if "queries" in data:
+                raise ValueError("send either 'queries' or 'queries_b64', not both")
+            items = data["queries_b64"]
+            if not isinstance(items, list):
+                raise ValueError("'queries_b64' must be a list of base64 strings")
+            data = {**data, "queries": [_b64_to_text(q) for q in items]}
+            data.pop("queries_b64")
+        return data
+
     queries: list[str] = Field(
         ...,
         min_length=1,

@@ -1,5 +1,5 @@
 """
-tests/test_api.py — pytest suite for SQLShield FastAPI (7 tests)
+tests/test_api.py — pytest suite for SQLShield FastAPI (10 tests)
 
 Uses fastapi.testclient.TestClient against the real application so that
 every request passes through routing, middleware, Pydantic validation,
@@ -13,6 +13,7 @@ What is tested:
   5. POST /api/predict    → response body matches PredictResponse schema
   6. POST /api/predict    → missing "query" field rejected with 422
   7. POST /api/predict    → long input (2 001 chars) rejected with 422
+  8–10. base64 transport (query_b64 / queries_b64)
 """
 
 from __future__ import annotations
@@ -162,3 +163,44 @@ def test_long_input_returns_422(client: TestClient):
     errors = resp.json()["detail"]
     field_locs = [e["loc"] for e in errors]
     assert any("query" in loc for loc in field_locs)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BASE64 TRANSPORT — the dashboard sends query_b64 / queries_b64 so the hosting
+# WAF does not 403 obvious injections before they reach the detector.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _b64(text: str) -> str:
+    import base64
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def test_query_b64_stacked_injection_is_malicious(client: TestClient):
+    """A base64-encoded stacked query is decoded and flagged as malicious."""
+    q = "1; DROP TABLE users --"
+    resp = client.post("/api/predict", json={"query_b64": _b64(q)})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["query"] == q
+    assert body["is_malicious"] is True
+
+
+def test_query_b64_invalid_or_ambiguous_returns_422(client: TestClient):
+    """Bad base64, empty decoded value, or both fields at once → 422."""
+    for payload in (
+        {"query_b64": "not base64!!"},
+        {"query_b64": _b64("")},
+        {"query_b64": _b64("A" * 2001)},
+        {"query": "SELECT 1", "query_b64": _b64("SELECT 1")},
+    ):
+        assert client.post("/api/predict", json=payload).status_code == 422, payload
+
+
+def test_batch_queries_b64(client: TestClient):
+    """Batch endpoint accepts queries_b64 and returns one result per query."""
+    qs = ["SELECT name FROM employees WHERE id = 7", "' OR 1=1--"]
+    resp = client.post("/api/predict/batch", json={"queries_b64": [_b64(q) for q in qs]})
+    assert resp.status_code == 200
+    results = resp.json()["results"]
+    assert [r["query"] for r in results] == qs
+    assert results[1]["is_malicious"] is True
