@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
 import time
 import warnings
 from pathlib import Path
@@ -194,10 +195,14 @@ def mlflow_run(
         mlflow.log_metrics({**m, "train_time_s": round(elapsed, 2)})
 
         # ── confusion matrix artifact
-        tmp_dir = os.path.join("mlruns", "_tmp", run.info.run_id)
-        png = save_confusion_matrix_png(clf, X_te, y_te, name, tmp_dir)
-        if png and os.path.exists(png):
-            mlflow.log_artifact(png, artifact_path="plots")
+        # Write the PNG to a system temp dir, NOT inside mlruns/: MLflow's
+        # FileStore treats every mlruns/<dir> as an experiment, so a
+        # mlruns/_tmp/<run_id> folder can be picked up as a "run" with no
+        # meta.yaml and crash end_run() (intermittent CI failure).
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            png = save_confusion_matrix_png(clf, X_te, y_te, name, tmp_dir)
+            if png and os.path.exists(png):
+                mlflow.log_artifact(png, artifact_path="plots")
 
         run_id = run.info.run_id
 
@@ -219,7 +224,7 @@ def run_mlflow_experiments(vec, X_tr, X_te, y_tr, y_te) -> list[dict]:
     All use the SAME train/test split (random_state=42, stratified).
     """
     print(f"\n[3/6] MLflow experiment: '{MLFLOW_EXPERIMENT}'")
-    shutil.rmtree("mlruns/_tmp", ignore_errors=True)
+    shutil.rmtree("mlruns/_tmp", ignore_errors=True)  # clean up legacy temp dir
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
     runs = []
