@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -84,7 +84,9 @@ class BatchPredictRequest(BaseModel):
             data.pop("queries_b64")
         return data
 
-    queries: list[str] = Field(
+    # Each item is capped like a single query; without this a 20-item batch
+    # could carry megabytes and tie up the worker for seconds.
+    queries: list[Annotated[str, Field(max_length=2000)]] = Field(
         ...,
         min_length=1,
         max_length=20,

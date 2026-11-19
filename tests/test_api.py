@@ -1,5 +1,5 @@
 """
-tests/test_api.py — pytest suite for SQLShield FastAPI (10 tests)
+tests/test_api.py — pytest suite for SQLShield FastAPI (12 tests)
 
 Uses fastapi.testclient.TestClient against the real application so that
 every request passes through routing, middleware, Pydantic validation,
@@ -14,6 +14,8 @@ What is tested:
   6. POST /api/predict    → missing "query" field rejected with 422
   7. POST /api/predict    → long input (2 001 chars) rejected with 422
   8–10. base64 transport (query_b64 / queries_b64)
+  11. rate limit → 429 per client IP
+  12. batch item > 2000 chars → 422
 """
 
 from __future__ import annotations
@@ -204,3 +206,28 @@ def test_batch_queries_b64(client: TestClient):
     results = resp.json()["results"]
     assert [r["query"] for r in results] == qs
     assert results[1]["is_malicious"] is True
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ABUSE LIMITS — rate limiting is keyed on the real client IP and enforced;
+# batch items are capped at 2000 chars each.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_rate_limit_returns_429_per_client_ip(client: TestClient):
+    """41st request in a minute from one client IP → 429; other IPs unaffected."""
+    hdr = {"CF-Connecting-IP": "203.0.113.41"}
+    codes = [
+        client.post("/api/predict", json={"query": "SELECT 1"}, headers=hdr).status_code
+        for _ in range(41)
+    ]
+    assert codes[:40] == [200] * 40
+    assert codes[40] == 429
+    other = client.post("/api/predict", json={"query": "SELECT 1"},
+                        headers={"CF-Connecting-IP": "203.0.113.42"})
+    assert other.status_code == 200
+
+
+def test_batch_item_over_2000_chars_returns_422(client: TestClient):
+    """Each batch item must respect the same 2000-char cap as a single query."""
+    resp = client.post("/api/predict/batch", json={"queries": ["SELECT 1", "A" * 2001]})
+    assert resp.status_code == 422

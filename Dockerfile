@@ -39,9 +39,11 @@ EXPOSE 8000
 
 # ── Health check (uses the /health endpoint we added)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" \
+  CMD python -c "import os, urllib.request; urllib.request.urlopen('http://localhost:%s/health' % os.environ.get('PORT', '8000'))" \
   || exit 1
 
 # ── Default start command
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+#    Shell form so $PORT set by the host (Render, Railway, Cloud Run…) is honoured.
+#    --proxy-headers makes request.client reflect the real client behind the proxy.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips="*"
 

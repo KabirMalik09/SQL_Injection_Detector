@@ -8,7 +8,9 @@ Model is loaded once at startup via the FastAPI lifespan context.
 Swagger UI is available at /docs, ReDoc at /redoc.
 """
 
-from __future__ import annotations
+# NOTE: no `from __future__ import annotations` here. With string annotations
+# FastAPI cannot resolve the request-body model through slowapi's
+# @limiter.limit wrapper and treats `body` as a query parameter (every call 422).
 
 import json
 import logging
@@ -203,7 +205,29 @@ async def lifespan(app: FastAPI):
 # ──────────────────────────────────────────────────────────────────────────────
 # RATE LIMITER  (slowapi — mirrors Flask-Limiter behaviour)
 # ──────────────────────────────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/hour", "40/minute"])
+PREDICT_RATE_LIMIT = "40/minute;200/hour"
+
+
+def client_ip(request: Request) -> str:
+    """
+    Real client IP for rate limiting. On Render every request arrives from the
+    proxy, so request.client.host alone would put all visitors in one bucket.
+    Cloudflare (in front of Render) sets CF-Connecting-IP; otherwise use the
+    first X-Forwarded-For hop, then the socket address.
+    """
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+# Limits are applied per route with @limiter.limit (slowapi only enforces
+# default_limits when SlowAPIMiddleware is installed, which it never was, so
+# the previous configuration did not rate-limit anything).
+limiter = Limiter(key_func=client_ip)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FASTAPI APP
@@ -318,7 +342,8 @@ async def health():
     ),
     tags=["Prediction"],
 )
-async def predict(body: PredictRequest):
+@limiter.limit(PREDICT_RATE_LIMIT)
+async def predict(request: Request, body: PredictRequest):
     if state.model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -372,7 +397,8 @@ async def predict(body: PredictRequest):
     description="Accepts a list of 1–20 SQL query strings and returns a prediction for each.",
     tags=["Prediction"],
 )
-async def predict_batch(body: BatchPredictRequest):
+@limiter.limit(PREDICT_RATE_LIMIT)
+async def predict_batch(request: Request, body: BatchPredictRequest):
     if state.model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
