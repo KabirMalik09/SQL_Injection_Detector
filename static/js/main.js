@@ -57,6 +57,7 @@ const copyTooltip     = document.getElementById("copyTooltip");
 
 // ApexCharts instance
 let perfChart = null;
+let lastModels = null;
 
 // Local history array (mirrors server state)
 let localHistory = [];
@@ -531,6 +532,8 @@ function renderModelTable(models) {
 }
 
 function renderModelChart(models) {
+  lastModels = models;
+  const tc = (window.SQLShieldTheme && window.SQLShieldTheme.chartColors()) || { mode: 'dark', text: '#e6edf3', grid: '#30363d' };
   const el = document.getElementById("modelChart");
   if (!el || typeof ApexCharts === "undefined") return;
 
@@ -547,7 +550,7 @@ function renderModelChart(models) {
     chart: {
       type: "bar",
       height: 240,
-      background: "#0d1117",
+      background: "transparent",
       toolbar: { show: false },
       animations: {
         enabled: true,
@@ -556,9 +559,9 @@ function renderModelChart(models) {
         animateGradually: { enabled: true, delay: 100 },
         dynamicAnimation:  { enabled: true, speed: 350 },
       },
-      theme: { mode: "dark" },
+      theme: { mode: tc.mode },
     },
-    theme: { mode: "dark" },
+    theme: { mode: tc.mode },
     plotOptions: {
       bar: {
         borderRadius: 4,
@@ -570,33 +573,33 @@ function renderModelChart(models) {
       { name: "F1-Score (%)", data: f1s },
       { name: "Accuracy (%)", data: accs },
     ],
-    colors: ["#3b82f6", "#10b981"],
+    colors: ["#6366f1", "#22d3ee"],
     xaxis: {
       categories: labels,
       labels: {
-        style: { colors: "#e6edf3", fontFamily: "'Inter', sans-serif", fontSize: "12px" },
+        style: { colors: tc.text, fontFamily: "'Inter', sans-serif", fontSize: "12px" },
       },
-      axisBorder: { color: "#30363d" },
-      axisTicks:  { color: "#30363d" },
+      axisBorder: { color: tc.grid },
+      axisTicks:  { color: tc.grid },
     },
     yaxis: {
       min: 0,
       max: 100,
       labels: {
-        style: { colors: "#e6edf3", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px" },
+        style: { colors: tc.text, fontFamily: "'JetBrains Mono', monospace", fontSize: "11px" },
         formatter: (v) => `${v}%`,
       },
     },
     grid: {
-      borderColor: "#30363d",
+      borderColor: tc.grid,
       strokeDashArray: 3,
     },
     legend: {
-      labels: { colors: "#e6edf3" },
+      labels: { colors: tc.text },
       fontFamily: "'Inter', sans-serif",
     },
     tooltip: {
-      theme: "dark",
+      theme: tc.mode,
       style: { fontFamily: "'Inter', sans-serif" },
       y: {
         formatter: (val) => `${val.toFixed(2)}%`,
@@ -728,3 +731,7 @@ function escHtml(str) {
     if (statusText) statusText.textContent = "Model Offline";
   });
 })();
+
+
+// Re-theme chart when light/dark is toggled
+window.addEventListener('themechange', () => { if (lastModels) renderModelChart(lastModels); });
